@@ -39,6 +39,7 @@ public abstract class AbstractPostgresIT {
 	void truncateOutboxMessage() throws SQLException {
 		try (Connection connection = newConnection(); Statement statement = connection.createStatement()) {
 			statement.execute("TRUNCATE TABLE outbox_message");
+			connection.commit(); // sem isto, o close() com autoCommit=false faz rollback implícito do TRUNCATE
 		}
 	}
 
