@@ -71,6 +71,24 @@ public record OutboxConfig(
 				purgeBatchSize, metricsInterval, healthMaxPendingAge, payloadLimits);
 	}
 
+	public OutboxConfig withRetention(Duration retention) {
+		return new OutboxConfig(pollingInterval, candidateLimit, publishTimeout, sessionTimeoutMargin,
+				relayWorkers, shutdownTimeout, maxAttempts, backoff, retention, purgeInterval,
+				purgeBatchSize, metricsInterval, healthMaxPendingAge, payloadLimits);
+	}
+
+	public OutboxConfig withPurgeInterval(Duration purgeInterval) {
+		return new OutboxConfig(pollingInterval, candidateLimit, publishTimeout, sessionTimeoutMargin,
+				relayWorkers, shutdownTimeout, maxAttempts, backoff, retention, purgeInterval,
+				purgeBatchSize, metricsInterval, healthMaxPendingAge, payloadLimits);
+	}
+
+	public OutboxConfig withPurgeBatchSize(int purgeBatchSize) {
+		return new OutboxConfig(pollingInterval, candidateLimit, publishTimeout, sessionTimeoutMargin,
+				relayWorkers, shutdownTimeout, maxAttempts, backoff, retention, purgeInterval,
+				purgeBatchSize, metricsInterval, healthMaxPendingAge, payloadLimits);
+	}
+
 	public OutboxConfig withPayloadLimits(PayloadLimits payloadLimits) {
 		return new OutboxConfig(pollingInterval, candidateLimit, publishTimeout, sessionTimeoutMargin,
 				relayWorkers, shutdownTimeout, maxAttempts, backoff, retention, purgeInterval,

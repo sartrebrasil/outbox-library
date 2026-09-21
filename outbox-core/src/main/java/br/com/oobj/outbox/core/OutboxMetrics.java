@@ -64,4 +64,8 @@ final class OutboxMetrics {
 	void retryScheduled(String destination) {
 		registry.counter("outbox_retry_scheduled_total", Tags.of("destination", destination)).increment();
 	}
+
+	void purgeDeleted(long count) {
+		registry.counter("outbox_purge_deleted_total").increment(count);
+	}
 }
