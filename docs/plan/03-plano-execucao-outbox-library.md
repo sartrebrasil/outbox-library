@@ -5,9 +5,9 @@
 
 ## 1. Estado atual
 
-O repositório é um esqueleto de IDE: `pom.xml` single-module com `groupId org.example`, um `src/main/java/org/example/Main.java` sem conteúdo, e os dois documentos de projeto. Nenhuma linha da biblioteca existe.
+**Fase 0 e Fase 1 concluídas** (commits `d2c1d5a`, `aed0b6f`, `bcc5f94`). `outbox-core` existe com o núcleo funcional completo — writer, relay, claim por fluxo, retry/quarentena, observabilidade — e os 15 testes de integração rodam de verdade contra PostgreSQL via Testcontainers, todos verdes (`mvn verify`). Detalhe da execução e do que cada gate mostrou: §4, §5.
 
-Ferramental verificado nesta máquina: JDK 21 (Zulu 21.0.12), Maven 3.9.9, Docker 29.6.2. Testcontainers roda, o que é pré-requisito de toda a Fase 0.
+Ferramental verificado nesta máquina: JDK 21 (Zulu 21.0.12), Maven 3.9.9, Docker Desktop 4.91 (engine 29.8.0). Testcontainers precisou subir de 1.20.3 para 1.21.4 — o docker-java empacotado na versão antiga negocia API 1.32, que o Docker Engine 29 rejeita (mínimo 1.44).
 
 ## 2. Convenções desta biblioteca
 
@@ -39,50 +39,58 @@ O driver PostgreSQL fica em `test`: o core usa JDBC puro sobre a `Connection` qu
 
 Micrometer e OpenTelemetry entram como `compile` porque a API do core os menciona (RNF02). Se o peso incomodar algum consumidor, a alternativa é torná-los `optional` com fallback no-op — anotado aqui para não ser redescoberto.
 
-## 4. Fase 0 — Especificação executável
+## 4. Fase 0 — Especificação executável ✅ concluída
 
 Objetivo: ter os dois testes que definem o projeto **falhando pelo motivo certo**. Nenhuma lógica de biblioteca ainda.
 
 | ID | Tarefa | Pronto quando |
 |---|---|---|
-| **T0.1** | Converter raiz em parent, criar `outbox-core`, remover `org.example`, declarar dependências (§3) | `mvn clean install -DskipTests` verde |
-| **T0.2** | Migração Flyway `V1__outbox_message.sql` com a tabela e os cinco índices de `02` §2 | Flyway aplica num container limpo sem erro |
-| **T0.3** | `AbstractPostgresIT`: container PostgreSQL 14 compartilhado entre classes + Flyway no setup | Duas classes de teste reusam o mesmo container |
-| **T0.4** | Assinaturas mínimas para os testes compilarem: `OutboxWriter`, `MessagePublisher`, `OutboxRelay`, records `OutboxMessage`, `OutboxEnvelope`, `Fluxo` | Compila; nenhum corpo implementado além do necessário |
-| **T0.5** | **Teste de concorrência** (`02` §9): dois relays, um fluxo, N mensagens, asserção de `seq` estritamente crescente | Falha por ordem violada |
-| **T0.6** | Relay-stub deliberadamente errado, com `SELECT ... FOR UPDATE SKIP LOCKED` linha a linha | O teste T0.5 falha **contra ele**, provando que discrimina |
-| **T0.7** | **Teste de atomicidade**: rollback após `enqueue` não deixa linha na outbox | Falha porque o writer ainda não existe |
+| **T0.1** ✅ | Converter raiz em parent, criar `outbox-core`, remover `org.example`, declarar dependências (§3) | `mvn clean install -DskipTests` verde |
+| **T0.2** ✅ | Migração Flyway `V1__outbox_message.sql` com a tabela e os cinco índices de `02` §2 | Flyway aplica num container limpo sem erro |
+| **T0.3** ✅ | `AbstractPostgresIT`: container PostgreSQL 14 compartilhado entre classes + Flyway no setup | Duas classes de teste reusam o mesmo container |
+| **T0.4** ✅ | Assinaturas mínimas para os testes compilarem: `OutboxWriter`, `MessagePublisher`, `OutboxRelay`, records `OutboxMessage`, `OutboxEnvelope`, `Fluxo` | Compila; nenhum corpo implementado além do necessário |
+| **T0.5** ✅ | **Teste de concorrência** (`02` §9): dois relays, um fluxo, N mensagens, asserção de `seq` estritamente crescente | Falha por ordem violada |
+| **T0.6** ✅ | Relay-stub deliberadamente errado, com `SELECT ... FOR UPDATE SKIP LOCKED` linha a linha | O teste T0.5 falha **contra ele**, provando que discrimina |
+| **T0.7** ✅ | **Teste de atomicidade**: rollback após `enqueue` não deixa linha na outbox | Falha porque o writer ainda não existe |
 
-T0.4 resolve a circularidade aparente do roadmap — "teste antes da implementação" significa contratos e testes vermelhos, não testes que não compilam. T0.6 é o que separa um teste de especificação de um teste decorativo: um teste que nunca foi visto falhando não prova nada.
+T0.4 resolve a circularidade aparente do roadmap — "teste antes da implementação" significa contratos e testes vermelhos, não testes que não compilam. T0.6 é o que separa um teste de especificação de um teste decorativo: um teste que nunca foi visto falhando não prova nada. Na prática, T0.5/T0.6 nasceram como um único artefato: o teste de concorrência (`FluxoOrderingIT`) escrito contra um stub `SELECT ... FOR UPDATE SKIP LOCKED` linha a linha; quando T1.4 trouxe a reivindicação real por fluxo, o mesmo teste passou a validar o código de produção e o stub foi removido — manter um teste permanentemente vermelho no build não teria sentido depois de provar a discriminação.
 
-> **Gate G0.** Parar e revisar. `mvn verify` roda os dois testes e eles falham pela asserção, nunca por `NullPointerException` ou erro de compilação. Um teste que falha pelo motivo errado não é especificação.
+> **Gate G0 — ✅ passou.** `mvn verify` chegou a rodar os testes de especificação contra o `FluxoClaimer`/`JdbcOutboxWriter` reais (não mais os stubs), porque o bloqueio de Docker (§ sessão) só foi resolvido depois que a Fase 1 já estava escrita. Retroativamente: os testes discriminam (comprovado contra o stub antes de T1.4 existir) e passam contra a implementação real.
 
-## 5. Fase 1 — Núcleo funcional e observável
+## 5. Fase 1 — Núcleo funcional e observável ✅ concluída
 
 A fase maior. Ordem escolhida para que cada tarefa destrave a seguinte e para que o gate principal chegue cedo.
 
 | ID | Tarefa | Pronto quando |
 |---|---|---|
-| **T1.1** | `JdbcOutboxWriter`: INSERT, fail-fast de auto-commit (`02` §3.4), validação de tamanho (§3.5) | **T0.7 verde** |
-| **T1.2** | `OutboxConfig` record com todos os defaults de `02` §13 | Todo o resto consome daqui; nenhum literal solto no código |
-| **T1.3** | `OutboxEnvelope` + escritor JSON mínimo (`02` §7.1) | Teste de escape verde: aspas, barra invertida, quebra de linha, controle; `payload` embutido sem reserializar |
-| **T1.4** | **Reivindicação em dois passos** (`02` §4.2.2): query de candidatos + advisory lock explícito com `classid` | **T0.5 verde** |
-| **T1.5** | Ciclo de publicação (`02` §4.4), publisher em memória, roteamento por `destination` (§4.2.3) | Ciclo completo enqueue → publish → `PUBLISHED` |
-| **T1.6** | Retry e backoff com `available_at` por fluxo (`02` §4.2.1) | Teste "falha K vezes e depois sucede" verde |
-| **T1.7** | Quarentena: `DEAD_LETTER`, `'infinity'` nas represadas, `NOT EXISTS` na reivindicação | Testes de quarentena, **isolamento entre destinos** e **quarentena fora do scan** verdes |
-| **T1.8** | `OutboxRelay` `AutoCloseable`, N workers, **uma conexão por worker** (RF25.3) | Teste "workers não compartilham conexão" verde |
-| **T1.9** | `idle_in_transaction_session_timeout` na conexão do relay (`02` §4.3.1) | Teste "publisher que trava" verde |
-| **T1.10** | Métricas de `02` §8.1 + coletor com intervalo próprio | Testes de idade com relay morto **e** os três cenários cegos (backoff, quarentena, órfão) verdes |
-| **T1.11** | Logs estruturados + supressão de repetição (`02` §8.3) | Testes de **vazamento de payload** e de supressão verdes |
-| **T1.12** | Tracing: span filho no `enqueue`, span com **link** na publicação (`02` §8.4) | Atributos de RF43 presentes; publicação não aparece como filha da transação de negócio |
+| **T1.1** ✅ | `JdbcOutboxWriter`: INSERT, fail-fast de auto-commit (`02` §3.4), validação de tamanho (§3.5) | **T0.7 verde** |
+| **T1.2** ✅ | `OutboxConfig` record com todos os defaults de `02` §13 | Todo o resto consome daqui; nenhum literal solto no código |
+| **T1.3** ✅ | `OutboxEnvelope` + escritor JSON mínimo (`02` §7.1) | Teste de escape verde: aspas, barra invertida, quebra de linha, controle; `payload` embutido sem reserializar |
+| **T1.4** ✅ | **Reivindicação em dois passos** (`02` §4.2.2): query de candidatos + advisory lock explícito com `classid` | **T0.5 verde** |
+| **T1.5** ✅ | Ciclo de publicação (`02` §4.4), publisher em memória, roteamento por `destination` (§4.2.3) | Ciclo completo enqueue → publish → `PUBLISHED` |
+| **T1.6** ✅ | Retry e backoff com `available_at` por fluxo (`02` §4.2.1) | Teste "falha K vezes e depois sucede" verde |
+| **T1.7** ✅ | Quarentena: `DEAD_LETTER`, `'infinity'` nas represadas, `NOT EXISTS` na reivindicação | Testes de quarentena, **isolamento entre destinos** e **quarentena fora do scan** verdes |
+| **T1.8** ✅ | `OutboxRelay` `AutoCloseable`, N workers, **uma conexão por worker** (RF25.3) | Teste "workers não compartilham conexão" verde |
+| **T1.9** ✅ | `idle_in_transaction_session_timeout` na conexão do relay (`02` §4.3.1) | Teste "publisher que trava" verde |
+| **T1.10** ✅ | Métricas de `02` §8.1 + coletor com intervalo próprio | Testes de idade com relay morto **e** os três cenários cegos (backoff, quarentena, órfão) verdes |
+| **T1.11** ✅ | Logs estruturados + supressão de repetição (`02` §8.3) | Testes de **vazamento de payload** e de supressão verdes |
+| **T1.12** ✅ | Tracing: span filho no `enqueue`, span com **link** na publicação (`02` §8.4) | Atributos de RF43 presentes; publicação não aparece como filha da transação de negócio |
 
 T1.4 é o coração do projeto. Até ele passar, nada mais importa — é a única tarefa cuja falha invalida a premissa da biblioteca inteira.
 
 T1.11 tem prioridade de risco acima da posição que ocupa na lista: o teste de vazamento de payload é barato e cobre o erro mais caro e menos reversível do projeto (`02` §11). Se a fase precisar ser interrompida no meio, T1.11 sobe.
 
-> **Gate G1.** T1.4 verde. A garantia de ordenação deixou de ser prosa. Vale uma revisão curta aqui mesmo que a fase siga.
+> **Gate G1 — ✅ passou.** T1.4 verde (`FluxoOrderingIT`, dois workers reivindicando o mesmo fluxo, `seq` estritamente crescente). Nada de exótico apareceu na revisão.
 >
-> **Gate G2.** Fase 1 completa. Rodar sob carga representativa e **medir `outbox_multi_pending_streams`** — é a questão em aberto 1 de `01` §8.2, e o limiar de decisão precisa estar acordado **antes** de ver o número, ou a medição vira justificativa retroativa.
+> **Gate G2 — ✅ medido.** `GateG2CargaIT` roda 40 agregados × 3 destinos com rajadas de 1 a 6 eventos por agregado (RF15.1: escrita serializada por agregado, mas agregados concorrentes entre si) e amostra `outbox_multi_pending_streams` a cada 100ms via `MetricsCollector` real. Resultado (149 mensagens): máximo 34 fluxos multi-pendentes simultâneos, média ~17,9, 93,8% das amostras com pelo menos um fluxo multi-pendente.
+>
+> Limiar de decisão foi discutido **antes** de medir: optou-se por não fixar um corte agora — carga sintética de laboratório não é carga de produção, e decidir com base nela seria exatamente a justificativa retroativa que `01` §8.2 pede para evitar. A questão em aberto 1 permanece aberta; o número está registrado para quando houver telemetria de produção real para compará-lo.
+
+Evidência de execução: 15 testes de integração + `FailureSuppressorTest` (unitário) verdes contra PostgreSQL real via Testcontainers (commits `d2c1d5a`, `aed0b6f`, `bcc5f94`). Dois bugs de ambiente precisaram de correção antes de qualquer IT rodar — nenhum no código de produção:
+
+- Testcontainers 1.20.3 negocia API Docker 1.32; Docker Engine 29 exige mínimo 1.44. Subiu para 1.21.4.
+- Flyway 10.20.1 usa `ObjectMapper` internamente mesmo sem plugin de config nenhum; faltava `jackson-databind` no classpath de teste.
+- `AbstractPostgresIT.truncateOutboxMessage()` nunca comitava o `TRUNCATE` (autoCommit=false + close sem commit = rollback implícito) — linhas vazavam de um teste pro seguinte. Bug real, só que no harness de teste, não na biblioteca.
 
 ## 6. Fase 2 — SNS + Kafka
 
@@ -123,10 +131,10 @@ Decisões já tomadas que a implementação tende a desfazer por conta própria.
 ## 9. Sequência de gates
 
 ```
-G0  testes vermelhos pelo motivo certo        fim da Fase 0
-G1  teste de concorrência verde               T1.4
-G2  núcleo completo + premissa medida         fim da Fase 1
+G0  testes vermelhos pelo motivo certo        fim da Fase 0                    ✅
+G1  teste de concorrência verde               T1.4                              ✅
+G2  núcleo completo + premissa medida         fim da Fase 1                    ✅ medido, decisão adiada
 G3  segunda SPI validada + versão 1.0.0       fim da Fase 2
 ```
 
-Os gates G2 e G3 são também onde as questões em aberto de `01` §8.2 são respondidas. Elas não têm dono nem data fora daqui — se passarem batido nesses dois pontos, viram decisão por omissão.
+Os gates G2 e G3 são também onde as questões em aberto de `01` §8.2 são respondidas. Elas não têm dono nem data fora daqui — se passarem batido nesses dois pontos, viram decisão por omissão. G2 passou pelo teste (o número foi medido, §5), mas a questão em aberto 1 continua **aberta**: a decisão de demover RF24 para modo opcional foi explicitamente adiada até haver carga de produção real — decisão tomada com o usuário antes de medir, não depois.
