@@ -5,7 +5,7 @@
 
 ## 1. Estado atual
 
-**Fase 0 e Fase 1 concluídas** (commits `d2c1d5a`, `aed0b6f`, `bcc5f94`). `outbox-core` existe com o núcleo funcional completo — writer, relay, claim por fluxo, retry/quarentena, observabilidade — e os 15 testes de integração rodam de verdade contra PostgreSQL via Testcontainers, todos verdes (`mvn verify`). Detalhe da execução e do que cada gate mostrou: §4, §5.
+**Fases 0, 1 e 2 concluídas.** `outbox-core` tem o núcleo funcional completo — writer, relay, claim por fluxo, retry/quarentena, observabilidade — e `outbox-broker-sns`/`outbox-broker-kafka` publicam de verdade contra LocalStack e Testcontainers Kafka. `mvn clean install` do reator inteiro (4 módulos) verde. Detalhe da execução e do que cada gate mostrou: §4, §5, §6.
 
 Ferramental verificado nesta máquina: JDK 21 (Zulu 21.0.12), Maven 3.9.9, Docker Desktop 4.91 (engine 29.8.0). Testcontainers precisou subir de 1.20.3 para 1.21.4 — o docker-java empacotado na versão antiga negocia API 1.32, que o Docker Engine 29 rejeita (mínimo 1.44).
 
@@ -92,19 +92,21 @@ Evidência de execução: 15 testes de integração + `FailureSuppressorTest` (u
 - Flyway 10.20.1 usa `ObjectMapper` internamente mesmo sem plugin de config nenhum; faltava `jackson-databind` no classpath de teste.
 - `AbstractPostgresIT.truncateOutboxMessage()` nunca comitava o `TRUNCATE` (autoCommit=false + close sem commit = rollback implícito) — linhas vazavam de um teste pro seguinte. Bug real, só que no harness de teste, não na biblioteca.
 
-## 6. Fase 2 — SNS + Kafka
+## 6. Fase 2 — SNS + Kafka ✅ concluída
 
 | ID | Tarefa | Pronto quando |
 |---|---|---|
-| **T2.1** | Módulo `outbox-broker-sns`: publicação FIFO, `MessageGroupId = aggregate_id`, `apiCallTimeout` a partir do `Duration` recebido | Teste de integração com LocalStack |
-| **T2.2** | Taxonomia de erro do SNS (`02` §5.4) | Cada exceção mapeada tem teste; o default é transitória |
-| **T2.3** | Módulo `outbox-broker-kafka`: `aggregate_id` como key, `delivery.timeout.ms` a partir do `Duration` | Teste de integração com container Kafka |
-| **T2.4** | Taxonomia de erro do Kafka | Idem T2.2 |
-| **T2.5** | README de cada módulo declarando **como o timeout é aplicado** (RF26, camada 1) | Documentado e verificável no código |
+| **T2.1** ✅ | Módulo `outbox-broker-sns`: publicação FIFO, `MessageGroupId = aggregate_id`, `apiCallTimeout` a partir do `Duration` recebido | Teste de integração com LocalStack |
+| **T2.2** ✅ | Taxonomia de erro do SNS (`02` §5.4) | Cada exceção mapeada tem teste; o default é transitória |
+| **T2.3** ✅ | Módulo `outbox-broker-kafka`: `aggregate_id` como key, `delivery.timeout.ms` a partir do `Duration` | Teste de integração com container Kafka |
+| **T2.4** ✅ | Taxonomia de erro do Kafka | Idem T2.2 |
+| **T2.5** ✅ | README de cada módulo declarando **como o timeout é aplicado** (RF26, camada 1) | Documentado e verificável no código |
 
-Os dois publishers saem juntos de propósito. Se a SPI precisar mudar para acomodar o segundo, **mudou cedo e de graça** — é exatamente o que RF06.2 compra.
+Os dois publishers saem juntos de propósito. Se a SPI precisar mudar para acomodar o segundo, **mudou cedo e de graça** — é exatamente o que RF06.2 compra. Na prática não mudou: `MessagePublisher.publish(envelope, timeout)` serviu os dois sem alteração. A única divergência real entre os módulos é que o Kafka não expõe timeout por chamada no nível de `request.timeout.ms`/`delivery.timeout.ms` (são configuração do `Producer`, não do `send()`) — documentada em `outbox-broker-kafka/README.md`, não escondida.
 
-> **Gate G3.** Dois publishers no ar. Responder à questão em aberto 2 de `01` §8.2 — o valor da biblioteca está no relay ou no contrato de escrita? — e só então promover a versão para `1.0.0`.
+Evidência: `SnsMessagePublisherIT` (LocalStack — tópico FIFO real, fila SQS FIFO inscrita, `MessageGroupId` confirmado na mensagem recebida) e `KafkaMessagePublisherIT` (Testcontainers Kafka — tópico real, key e corpo confirmados no registro consumido), ambos `BUILD SUCCESS`. Taxonomia de erro dos dois módulos com teste unitário por exceção mapeada (`SnsMessagePublisherTest`, `KafkaMessagePublisherTest`), usando cliente mockado — não dependem de container.
+
+> **Gate G3 — ✅ publishers no ar; questão em aberto 2 continua aberta.** Dois publishers reais, testados ponta a ponta contra os brokers de verdade (via LocalStack/Testcontainers). O critério de saída da questão em aberto 2 de `01` §8.2 exige "o primeiro uso real" — que não existe ainda, só os módulos e os testes. Promover para `1.0.0` sem essa resposta seria estabilizar a API sobre uma pergunta não respondida; a versão permanece `0.x` até haver um consumidor real do relay em produção.
 
 ## 7. Fases 3 a 5
 
@@ -134,7 +136,7 @@ Decisões já tomadas que a implementação tende a desfazer por conta própria.
 G0  testes vermelhos pelo motivo certo        fim da Fase 0                    ✅
 G1  teste de concorrência verde               T1.4                              ✅
 G2  núcleo completo + premissa medida         fim da Fase 1                    ✅ medido, decisão adiada
-G3  segunda SPI validada + versão 1.0.0       fim da Fase 2
+G3  segunda SPI validada + versão 1.0.0       fim da Fase 2                    ✅ SPI validada, 1.0.0 adiado
 ```
 
 Os gates G2 e G3 são também onde as questões em aberto de `01` §8.2 são respondidas. Elas não têm dono nem data fora daqui — se passarem batido nesses dois pontos, viram decisão por omissão. G2 passou pelo teste (o número foi medido, §5), mas a questão em aberto 1 continua **aberta**: a decisão de demover RF24 para modo opcional foi explicitamente adiada até haver carga de produção real — decisão tomada com o usuário antes de medir, não depois.
