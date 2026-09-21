@@ -5,6 +5,7 @@ import br.com.oobj.outbox.core.MessagePublisher;
 import br.com.oobj.outbox.core.MetricsCollector;
 import br.com.oobj.outbox.core.OutboxConfig;
 import br.com.oobj.outbox.core.OutboxRelay;
+import br.com.oobj.outbox.core.PurgeJob;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
@@ -30,11 +31,12 @@ class OutboxAutoConfigurationTest {
 			.withConfiguration(AutoConfigurations.of(OutboxAutoConfiguration.class));
 
 	@Test
-	void semPublisherNaoCriaRelayNemColetor() {
+	void semPublisherNaoCriaRelayNemColetorMasCriaPurgeJob() {
 		contextRunner.run(context -> {
 			assertThat(context).hasSingleBean(OutboxConfig.class);
 			assertThat(context).hasSingleBean(JdbcOutboxWriter.class);
 			assertThat(context).hasSingleBean(SpringOutboxWriter.class);
+			assertThat(context).hasSingleBean(PurgeJob.class); // independe de publisher/relay (02 §6)
 			assertThat(context).doesNotHaveBean(OutboxRelay.class);
 			assertThat(context).doesNotHaveBean(MetricsCollector.class);
 			assertThat(context).doesNotHaveBean(OutboxHealthIndicator.class);

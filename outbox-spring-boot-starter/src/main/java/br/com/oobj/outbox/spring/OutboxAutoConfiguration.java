@@ -5,6 +5,7 @@ import br.com.oobj.outbox.core.MessagePublisher;
 import br.com.oobj.outbox.core.MetricsCollector;
 import br.com.oobj.outbox.core.OutboxConfig;
 import br.com.oobj.outbox.core.OutboxRelay;
+import br.com.oobj.outbox.core.PurgeJob;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -71,6 +72,13 @@ public class OutboxAutoConfiguration {
 	public MetricsCollector metricsCollector(DataSource dataSource, MeterRegistry registry, OutboxConfig config,
 			OutboxRelay relay) {
 		return new MetricsCollector(dataSource, registry, config.metricsInterval(), relay::lastCycleCompletedAt);
+	}
+
+	/** Independe de relay/publisher: purga PUBLISHED antigo mesmo em instância só-escritora (02 §6). */
+	@Bean(initMethod = "start", destroyMethod = "close")
+	@ConditionalOnMissingBean
+	public PurgeJob purgeJob(DataSource dataSource, OutboxConfig config, MeterRegistry registry) {
+		return new PurgeJob(dataSource, config, registry);
 	}
 
 	/**

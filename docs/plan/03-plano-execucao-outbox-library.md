@@ -5,7 +5,7 @@
 
 ## 1. Estado atual
 
-**Fases 0, 1, 2 e 3 concluídas.** `outbox-core` tem o núcleo funcional completo — writer, relay, claim por fluxo, retry/quarentena, observabilidade —, `outbox-broker-sns`/`outbox-broker-kafka` publicam de verdade contra LocalStack e Testcontainers Kafka, e `outbox-spring-boot-starter` autoconfigura tudo isso num contexto Spring real. `mvn clean install` do reator inteiro (5 módulos) verde. Detalhe da execução e do que cada gate mostrou: §4, §5, §6, §7.
+**Fases 0, 1, 2, 3 e 4 concluídas.** `outbox-core` tem o núcleo funcional completo — writer, relay, claim por fluxo, retry/quarentena, observabilidade —, `outbox-broker-sns`/`outbox-broker-kafka` publicam de verdade contra LocalStack e Testcontainers Kafka, e `outbox-spring-boot-starter` autoconfigura tudo isso num contexto Spring real. `mvn clean install` do reator inteiro (5 módulos) verde. Detalhe da execução e do que cada gate mostrou: §4, §5, §6, §7.
 
 Ferramental verificado nesta máquina: JDK 21 (Zulu 21.0.12), Maven 3.9.9, Docker Desktop 4.91 (engine 29.8.0). Testcontainers precisou subir de 1.20.3 para 1.21.4 — o docker-java empacotado na versão antiga negocia API 1.32, que o Docker Engine 29 rejeita (mínimo 1.44).
 
@@ -113,7 +113,7 @@ Evidência: `SnsMessagePublisherIT` (LocalStack — tópico FIFO real, fila SQS 
 | Fase | Tarefas | Observação |
 |---|---|---|
 | **3 — Starter** ✅ | Autoconfiguration, `@ConfigurationProperties("outbox")` mapeando `02` §13, sobrecarga `enqueue(msg)`, sobrecarga que serializa com `ObjectMapper`, integração JPA via `doWork`, `HealthIndicator` | Primeiro módulo com Spring. O core continua sem |
-| **4 — Operação** | Job de purga em lote, `outbox_oldest_dead_letter_age_seconds` e alerta, README raiz com a pré-condição RF15.1 **em destaque**, exemplos com e sem Spring | RNF07 |
+| **4 — Operação** ✅ | Job de purga em lote, `outbox_oldest_dead_letter_age_seconds` e alerta, README raiz com a pré-condição RF15.1 **em destaque**, exemplos com e sem Spring | RNF07 |
 | **5 — Demais brokers** | `outbox-broker-sqs`, `outbox-broker-rabbitmq` | Com a SPI já validada, cada um é pequeno e independente |
 
 **Fase 3, detalhe.** `outbox-spring-boot-starter`, Spring Boot 3.5.14 (`spring-boot-dependencies` importado só no pom deste módulo — no raiz sobrescreveria versões de JUnit/AssertJ/Mockito/Jackson/Kafka já gerenciadas para o resto do reator). `OutboxProperties` é um record com *constructor binding* e `@DefaultValue`, incluindo o record aninhado `Backoff` e `Map<String, Destination>` para overrides por destino (chave com ponto exige colchetes: `outbox.destinations[pedidos.fifo].max-payload-bytes`) — testado de verdade contra o binder do Spring, não assumido.
@@ -121,6 +121,12 @@ Evidência: `SnsMessagePublisherIT` (LocalStack — tópico FIFO real, fila SQS 
 `OutboxRelay` e `MetricsCollector` só nascem como bean se houver pelo menos um `MessagePublisher` registrado (`@ConditionalOnBean`); sem publisher, a aplicação só enfileira, zero thread extra. `HealthIndicator` só existe com Actuator no classpath e `outbox.health-max-pending-age` configurado — sem essa propriedade a lib não inventa limiar (`02` §13). Integração JPA via `doWork` não precisou de código novo: `Session.doWork(Connection -> ...)` já casa com a assinatura de `JdbcOutboxWriter.enqueue(Connection, OutboxMessage)`, que a autoconfiguração já expõe como bean — documentado no README do módulo, não implementado de novo.
 
 Evidência: 8 testes unitários (`ApplicationContextRunner`, sem container) + 4 de integração (`SpringOutboxWriterIT`, Postgres real via Testcontainers, `TransactionTemplate` de verdade) — todos verdes, `mvn verify`.
+
+**Fase 4, detalhe.** `outbox_oldest_dead_letter_age_seconds` já tinha sido implementado na Fase 1 (`MetricsCollector`, junto com os outros gauges de `02` §8.1) — não havia nada pendente ali além do alerta, que é documentação, não código. O que faltava de verdade era `PurgeJob` (novo, em `outbox-core`, com `outbox_purge_deleted_total` adicionado a `OutboxMetrics`) e os READMEs: raiz (com RF15.1 em destaque, quickstarts com e sem Spring, consulta de diagnóstico de fluxo órfão e exemplos de alerta Prometheus) e `outbox-core` (faltava, apesar de já existir em `outbox-broker-sns`, `outbox-broker-kafka` e `outbox-spring-boot-starter` desde as fases anteriores).
+
+`PurgeJob` roda em lotes de `outbox.purge-batch-size`, repetidos dentro do mesmo ciclo até um lote vir menor que o tamanho do lote — nunca uma transação de exclusão longa (`02` §6). Autoconfigurado no starter como bean sempre presente (`@ConditionalOnMissingBean` sem `@ConditionalOnBean` de publisher): purga é independente de relay, porque uma instância só-escritora também deve limpar `PUBLISHED` antigo. `DEAD_LETTER` e as pendentes represadas atrás dele continuam sem prazo, de propósito (`02` §5.2/§6) — a purga nunca toca nelas.
+
+Evidência: `PurgeJobIT` (Postgres real, lote pequeno forçando múltiplas iterações num só ciclo, confirma que `PUBLISHED` antigo é apagado e `DEAD_LETTER`/recente sobrevivem) e o teste de autoconfiguração atualizado para confirmar que `PurgeJob` nasce sem publisher registrado. `mvn verify` do reator completo (5 módulos, unit + integração) `BUILD SUCCESS`.
 
 ## 8. Armadilhas — o que não fazer
 
