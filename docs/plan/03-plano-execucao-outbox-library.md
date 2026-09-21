@@ -5,7 +5,7 @@
 
 ## 1. Estado atual
 
-**Fases 0, 1, 2, 3 e 4 concluídas.** `outbox-core` tem o núcleo funcional completo — writer, relay, claim por fluxo, retry/quarentena, observabilidade —, `outbox-broker-sns`/`outbox-broker-kafka` publicam de verdade contra LocalStack e Testcontainers Kafka, e `outbox-spring-boot-starter` autoconfigura tudo isso num contexto Spring real. `mvn clean install` do reator inteiro (5 módulos) verde. Detalhe da execução e do que cada gate mostrou: §4, §5, §6, §7.
+**Todas as fases do roadmap (0 a 5) concluídas.** `outbox-core` tem o núcleo funcional completo — writer, relay, claim por fluxo, retry/quarentena, purga, observabilidade —, os quatro módulos de broker (`sns`, `sqs`, `kafka`, `rabbitmq`) publicam de verdade contra broker real ou LocalStack/Testcontainers, e `outbox-spring-boot-starter` autoconfigura tudo isso num contexto Spring real. `mvn clean install` do reator inteiro (7 módulos) verde. Detalhe da execução e do que cada gate mostrou: §4, §5, §6, §7. O que resta é só o que sempre dependeu de produção real: as questões em aberto de `01` §8.2.
 
 Ferramental verificado nesta máquina: JDK 21 (Zulu 21.0.12), Maven 3.9.9, Docker Desktop 4.91 (engine 29.8.0). Testcontainers precisou subir de 1.20.3 para 1.21.4 — o docker-java empacotado na versão antiga negocia API 1.32, que o Docker Engine 29 rejeita (mínimo 1.44).
 
@@ -114,7 +114,7 @@ Evidência: `SnsMessagePublisherIT` (LocalStack — tópico FIFO real, fila SQS 
 |---|---|---|
 | **3 — Starter** ✅ | Autoconfiguration, `@ConfigurationProperties("outbox")` mapeando `02` §13, sobrecarga `enqueue(msg)`, sobrecarga que serializa com `ObjectMapper`, integração JPA via `doWork`, `HealthIndicator` | Primeiro módulo com Spring. O core continua sem |
 | **4 — Operação** ✅ | Job de purga em lote, `outbox_oldest_dead_letter_age_seconds` e alerta, README raiz com a pré-condição RF15.1 **em destaque**, exemplos com e sem Spring | RNF07 |
-| **5 — Demais brokers** | `outbox-broker-sqs`, `outbox-broker-rabbitmq` | Com a SPI já validada, cada um é pequeno e independente |
+| **5 — Demais brokers** ✅ | `outbox-broker-sqs`, `outbox-broker-rabbitmq` | Com a SPI já validada, cada um é pequeno e independente |
 
 **Fase 3, detalhe.** `outbox-spring-boot-starter`, Spring Boot 3.5.14 (`spring-boot-dependencies` importado só no pom deste módulo — no raiz sobrescreveria versões de JUnit/AssertJ/Mockito/Jackson/Kafka já gerenciadas para o resto do reator). `OutboxProperties` é um record com *constructor binding* e `@DefaultValue`, incluindo o record aninhado `Backoff` e `Map<String, Destination>` para overrides por destino (chave com ponto exige colchetes: `outbox.destinations[pedidos.fifo].max-payload-bytes`) — testado de verdade contra o binder do Spring, não assumido.
 
@@ -127,6 +127,16 @@ Evidência: 8 testes unitários (`ApplicationContextRunner`, sem container) + 4 
 `PurgeJob` roda em lotes de `outbox.purge-batch-size`, repetidos dentro do mesmo ciclo até um lote vir menor que o tamanho do lote — nunca uma transação de exclusão longa (`02` §6). Autoconfigurado no starter como bean sempre presente (`@ConditionalOnMissingBean` sem `@ConditionalOnBean` de publisher): purga é independente de relay, porque uma instância só-escritora também deve limpar `PUBLISHED` antigo. `DEAD_LETTER` e as pendentes represadas atrás dele continuam sem prazo, de propósito (`02` §5.2/§6) — a purga nunca toca nelas.
 
 Evidência: `PurgeJobIT` (Postgres real, lote pequeno forçando múltiplas iterações num só ciclo, confirma que `PUBLISHED` antigo é apagado e `DEAD_LETTER`/recente sobrevivem) e o teste de autoconfiguração atualizado para confirmar que `PurgeJob` nasce sem publisher registrado. `mvn verify` do reator completo (5 módulos, unit + integração) `BUILD SUCCESS`.
+
+**Fase 5, detalhe.** `outbox-broker-sqs`: FIFO detectado pela própria `queueUrl` (toda fila FIFO da AWS termina em `.fifo`, restrição do serviço, não convenção do módulo) — filas padrão não recebem `MessageGroupId`/`MessageDeduplicationId`, testado nos dois sentidos. Taxonomia: `InvalidMessageContentsException`/`KmsAccessDeniedException`/corpo > 256KB permanentes, resto transitório — mesmo padrão de `outbox-broker-sns`.
+
+`outbox-broker-rabbitmq`: publisher confirms é pré-requisito documentado, não configurado pelo módulo (`channel.confirmSelect()` é responsabilidade da aplicação que possui o canal). Timeout via `channel.waitForConfirms(timeout.toMillis())` — mecanismo nativo do cliente. `nack` classificado permanente (o broker rejeitou de propósito); `IOException`/`TimeoutException` transitórios (canal/conexão caída). Verificação de frame máximo usa margem de segurança de 8KB sobre o valor negociado da conexão — aproximação deliberada e documentada no README, não contagem exata de bytes de protocolo.
+
+Nenhum dos dois módulos precisou mudar a SPI — quarta implementação de `MessagePublisher`, mesma interface das três anteriores. A questão em aberto 2 de `01` §8.2 (relay ou contrato de escrita?) não avança com mais módulos de laboratório; continua esperando o primeiro uso real, como registrado no Gate G3.
+
+Evidência: `SqsMessagePublisherIT` (LocalStack, fila FIFO real) e `RabbitMqMessagePublisherIT` (Testcontainers RabbitMQ, exchange + fila reais), ambos `BUILD SUCCESS`, mais 12 testes unitários de taxonomia de erro (6 por módulo, cliente mockado) entre os dois. `mvn clean install` do reator completo (7 módulos) verde.
+
+Com isso, o roadmap de `docs/plan/03` está inteiramente executado — restam só as questões em aberto de `01` §8.2, que dependem de dado de produção que este repositório, por ser um laboratório, não tem.
 
 ## 8. Armadilhas — o que não fazer
 

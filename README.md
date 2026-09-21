@@ -23,7 +23,9 @@ Requisitos completos: `docs/plan/01-requisitos-outbox-library.md`. Arquitetura e
 |---|---|---|
 | [`outbox-core`](outbox-core/README.md) | Writer, relay, retry, quarentena, purga, métricas, tracing | Não |
 | [`outbox-broker-sns`](outbox-broker-sns/README.md) | `MessagePublisher` para AWS SNS FIFO | Não |
+| [`outbox-broker-sqs`](outbox-broker-sqs/README.md) | `MessagePublisher` para AWS SQS (padrão ou FIFO) | Não |
 | [`outbox-broker-kafka`](outbox-broker-kafka/README.md) | `MessagePublisher` para Apache Kafka | Não |
+| [`outbox-broker-rabbitmq`](outbox-broker-rabbitmq/README.md) | `MessagePublisher` para RabbitMQ | Não |
 | [`outbox-spring-boot-starter`](outbox-spring-boot-starter/README.md) | Autoconfiguration, `@ConfigurationProperties`, `HealthIndicator` | Sim |
 
 ## Quickstart — com Spring Boot
