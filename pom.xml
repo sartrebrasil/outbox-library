@@ -14,6 +14,8 @@
         <module>outbox-broker-sns</module>
         <module>outbox-broker-kafka</module>
         <module>outbox-spring-boot-starter</module>
+        <module>outbox-broker-sqs</module>
+        <module>outbox-broker-rabbitmq</module>
     </modules>
 
     <properties>
@@ -35,6 +37,7 @@
         <aws-sdk.version>2.44.7</aws-sdk.version>
         <kafka-clients.version>4.3.1</kafka-clients.version>
         <spring-boot.version>3.5.14</spring-boot.version>
+        <amqp-client.version>5.35.0</amqp-client.version>
     </properties>
 
     <dependencyManagement>
@@ -130,6 +133,16 @@
                 <groupId>org.testcontainers</groupId>
                 <artifactId>kafka</artifactId>
                 <version>${testcontainers.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>rabbitmq</artifactId>
+                <version>${testcontainers.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.rabbitmq</groupId>
+                <artifactId>amqp-client</artifactId>
+                <version>${amqp-client.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
