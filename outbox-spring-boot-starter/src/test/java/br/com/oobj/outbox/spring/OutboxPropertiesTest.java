@@ -1,7 +1,7 @@
 package br.com.oobj.outbox.spring;
 
 import br.com.oobj.outbox.core.OutboxConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;

@@ -14,7 +14,7 @@
     <packaging>jar</packaging>
 
     <properties>
-        <spring-boot.version>3.5.14</spring-boot.version>
+        <spring-boot.version>4.1.1</spring-boot.version>
     </properties>
 
     <!--
@@ -42,9 +42,9 @@
             <version>${project.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
+            <!-- Jackson 3, versão do BOM do Boot; o jackson.version do raiz (2.x) fica só para testes do core. -->
+            <groupId>tools.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
         </dependency>
 
         <dependency>

@@ -36,7 +36,7 @@
         <jackson.version>2.18.2</jackson.version>
         <aws-sdk.version>2.44.7</aws-sdk.version>
         <kafka-clients.version>4.3.1</kafka-clients.version>
-        <spring-boot.version>3.5.14</spring-boot.version>
+        <spring-boot.version>4.1.1</spring-boot.version>
         <amqp-client.version>5.35.0</amqp-client.version>
     </properties>
 
