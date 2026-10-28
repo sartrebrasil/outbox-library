@@ -3,7 +3,7 @@ package br.com.oobj.outbox.spring;
 import br.com.oobj.outbox.core.JdbcOutboxWriter;
 import br.com.oobj.outbox.core.OutboxConfig;
 import br.com.oobj.outbox.core.OutboxMessage;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;

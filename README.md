@@ -22,10 +22,8 @@ Requisitos completos: `docs/plan/01-requisitos-outbox-library.md`. Arquitetura e
 | Módulo | O que é | Depende de Spring? |
 |---|---|---|
 | [`outbox-core`](outbox-core/README.md) | Writer, relay, retry, quarentena, purga, métricas, tracing | Não |
-| [`outbox-broker-sns`](outbox-broker-sns/README.md) | `MessagePublisher` para AWS SNS FIFO | Não |
-| [`outbox-broker-sqs`](outbox-broker-sqs/README.md) | `MessagePublisher` para AWS SQS (padrão ou FIFO) | Não |
+| [`outbox-broker-messaging`](outbox-broker-messaging/README.md) | `MessagePublisher` sobre `MessageSender` da messaging-library (SQS, SNS, RabbitMQ, Pub/Sub, Service Bus, JMS) | Não |
 | [`outbox-broker-kafka`](outbox-broker-kafka/README.md) | `MessagePublisher` para Apache Kafka | Não |
-| [`outbox-broker-rabbitmq`](outbox-broker-rabbitmq/README.md) | `MessagePublisher` para RabbitMQ | Não |
 | [`outbox-spring-boot-starter`](outbox-spring-boot-starter/README.md) | Autoconfiguration, `@ConfigurationProperties`, `HealthIndicator` | Sim |
 
 ## Quickstart — com Spring Boot
@@ -40,7 +38,7 @@ Requisitos completos: `docs/plan/01-requisitos-outbox-library.md`. Arquitetura e
 ```java
 @Bean("pedidos.fifo")
 MessagePublisher pedidosPublisher(SnsClient client) {
-    return new SnsMessagePublisher(client, "arn:aws:sns:us-east-1:123:pedidos.fifo");
+    return new MessageSenderPublisher(new SnsMessageSender(client, "arn:aws:sns:us-east-1:123:pedidos.fifo"));
 }
 ```
 
@@ -73,7 +71,7 @@ try (Connection connection = dataSource.getConnection()) {
 }
 
 OutboxRelay relay = new OutboxRelay(dataSource, config, registry,
-        Map.of("pedidos.fifo", new SnsMessagePublisher(snsClient, topicArn)));
+        Map.of("pedidos.fifo", new MessageSenderPublisher(new SnsMessageSender(snsClient, topicArn))));
 relay.start(); // e relay.close() no shutdown
 
 PurgeJob purgeJob = new PurgeJob(dataSource, config, registry);
