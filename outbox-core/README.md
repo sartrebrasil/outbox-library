@@ -36,7 +36,7 @@ rápida, não prova de atomicidade — a prova real são os testes de integraç�
 
 ```java
 Map<String, MessagePublisher> publishers = Map.of(
-        "pedidos.fifo", new SnsMessagePublisher(snsClient, topicArn),
+        "pedidos.fifo", new MessageSenderPublisher(new SnsMessageSender(snsClient, topicArn)),
         "notas.topic", new KafkaMessagePublisher(kafkaProducer, "notas"));
 
 OutboxRelay relay = new OutboxRelay(dataSource, config, meterRegistry, publishers);

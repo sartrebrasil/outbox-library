@@ -10,9 +10,9 @@ Core agnóstico com módulos plugáveis.
 ```
 outbox-core                → contratos, modelo, envelope, motor de retry,
                              implementação JDBC e relay de polling
-outbox-broker-sns          → MessagePublisher para AWS SNS (FIFO)
 outbox-broker-kafka        → MessagePublisher para Apache Kafka
-outbox-broker-sqs          → MessagePublisher para AWS SQS
+outbox-broker-messaging    → MessagePublisher sobre MessageSender da messaging-library
+                             (substitui outbox-broker-sns e outbox-broker-sqs)
 outbox-broker-rabbitmq     → MessagePublisher para RabbitMQ
 outbox-spring-boot-starter → autoconfiguration + sobrecarga enqueue(msg)
 ```

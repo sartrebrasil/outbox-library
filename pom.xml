@@ -11,10 +11,9 @@
 
     <modules>
         <module>outbox-core</module>
-        <module>outbox-broker-sns</module>
         <module>outbox-broker-kafka</module>
         <module>outbox-spring-boot-starter</module>
-        <module>outbox-broker-sqs</module>
+        <module>outbox-broker-messaging</module>
         <module>outbox-broker-rabbitmq</module>
     </modules>
 
@@ -38,6 +37,7 @@
         <kafka-clients.version>4.3.1</kafka-clients.version>
         <spring-boot.version>4.1.1</spring-boot.version>
         <amqp-client.version>5.35.0</amqp-client.version>
+        <messaging.version>0.1.0-SNAPSHOT</messaging.version>
     </properties>
 
     <dependencyManagement>
@@ -46,6 +46,13 @@
                 <groupId>software.amazon.awssdk</groupId>
                 <artifactId>bom</artifactId>
                 <version>${aws-sdk.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.example</groupId>
+                <artifactId>messaging-bom</artifactId>
+                <version>${messaging.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
