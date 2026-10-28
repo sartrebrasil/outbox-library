@@ -63,7 +63,7 @@ class RabbitMessageSenderPublisherIT {
 		channel.basicConsume(queue, true, (consumerTag, delivery) -> recebidas.add(delivery), consumerTag -> { });
 
 		MessageSenderPublisher publisher = new MessageSenderPublisher(RabbitMessageSender.forExchangeByOrderingKey(
-				connection, exchange, RabbitMessageSender.DEFAULT_MAX_MESSAGE_BYTES));
+				connection, exchange, RabbitMessageSender.DEFAULT_MAX_MESSAGE_BYTES).withConfirmTimeout(Duration.ofSeconds(5)));
 		OutboxEnvelope envelope = new OutboxEnvelope(UUID.randomUUID(), "Pedido", "pedido-1", 1L, "PedidoCriado",
 				Instant.now(), Map.of(), "{\"total\":10}", exchange, 0,
 				"{\"eventType\":\"PedidoCriado\",\"payload\":{\"total\":10}}");

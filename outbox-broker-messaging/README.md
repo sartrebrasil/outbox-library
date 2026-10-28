@@ -17,7 +17,8 @@ MessagePublisher notas = new MessageSenderPublisher(
 
 Connection rabbit = connectionFactory.newConnection();
 MessagePublisher eventos = new MessageSenderPublisher(RabbitMessageSender.forExchangeByOrderingKey(
-        rabbit, "pedidos.exchange", RabbitMessageSender.DEFAULT_MAX_MESSAGE_BYTES));
+        rabbit, "pedidos.exchange", RabbitMessageSender.DEFAULT_MAX_MESSAGE_BYTES)
+        .withConfirmTimeout(Duration.ofSeconds(5)));
 ```
 
 O adapter do provedor (`messaging-aws`, `messaging-gcp`...) é dependência da aplicação,
@@ -62,8 +63,10 @@ SqsClient.builder()
         .build();
 ```
 
-No RabbitMQ, o prazo do confirm é fixo em 30 s no `RabbitMessageSender`, então
-`outbox.publish-timeout` precisa ser de pelo menos 30 s.
+No RabbitMQ, o prazo é o do publisher confirm: `withConfirmTimeout(...)` no
+`RabbitMessageSender` (padrão 30 s), ou `confirm-timeout` no messaging-spring-boot-starter.
+Configure-o com `confirmTimeout <= outbox.publish-timeout`. O prazo vale também com o broker
+em alarme de memória ou disco.
 
 Se não configurar, a rede de segurança do banco (`idle_in_transaction_session_timeout`,
 02 §4.3.1) continua valendo, mas vai abortar a transação antes de o SDK desistir.
