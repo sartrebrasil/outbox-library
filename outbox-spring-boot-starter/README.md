@@ -26,7 +26,7 @@ automaticamente, chaveado pelo **nome do bean**:
 ```java
 @Bean("pedidos.fifo")
 MessagePublisher pedidosPublisher(SnsClient client) {
-    return new SnsMessagePublisher(client, "arn:aws:sns:us-east-1:123:pedidos.fifo");
+    return new MessageSenderPublisher(new SnsMessageSender(client, "arn:aws:sns:us-east-1:123:pedidos.fifo"));
 }
 ```
 
