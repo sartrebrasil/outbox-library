@@ -1,6 +1,7 @@
-package br.com.oobj.outbox.broker.rabbitmq;
+package br.com.oobj.outbox.broker.messaging;
 
 import br.com.oobj.outbox.core.OutboxEnvelope;
+import com.example.messaging.rabbitmq.RabbitMessageSender;
 import com.rabbitmq.client.BuiltinExchangeType;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -23,9 +24,9 @@ import java.util.concurrent.BlockingQueue;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
-/** T5: publica num exchange RabbitMQ real (Testcontainers) e confirma routing key e corpo entregues. */
+/** Publica num exchange RabbitMQ real (Testcontainers) e confirma routing key, message-id e corpo entregues. */
 @Testcontainers
-class RabbitMqMessagePublisherIT {
+class RabbitMessageSenderPublisherIT {
 
 	@Container
 	private static final RabbitMQContainer RABBITMQ = new RabbitMQContainer("rabbitmq:3.13-management-alpine");
@@ -42,7 +43,6 @@ class RabbitMqMessagePublisherIT {
 		factory.setPassword(RABBITMQ.getAdminPassword());
 		connection = factory.newConnection();
 		channel = connection.createChannel();
-		channel.confirmSelect();
 	}
 
 	@AfterAll
@@ -62,7 +62,8 @@ class RabbitMqMessagePublisherIT {
 		BlockingQueue<Delivery> recebidas = new ArrayBlockingQueue<>(1);
 		channel.basicConsume(queue, true, (consumerTag, delivery) -> recebidas.add(delivery), consumerTag -> { });
 
-		RabbitMqMessagePublisher publisher = new RabbitMqMessagePublisher(channel, exchange);
+		MessageSenderPublisher publisher = new MessageSenderPublisher(RabbitMessageSender.forExchangeByOrderingKey(
+				connection, exchange, RabbitMessageSender.DEFAULT_MAX_MESSAGE_BYTES));
 		OutboxEnvelope envelope = new OutboxEnvelope(UUID.randomUUID(), "Pedido", "pedido-1", 1L, "PedidoCriado",
 				Instant.now(), Map.of(), "{\"total\":10}", exchange, 0,
 				"{\"eventType\":\"PedidoCriado\",\"payload\":{\"total\":10}}");
@@ -72,6 +73,7 @@ class RabbitMqMessagePublisherIT {
 		Delivery entregue = recebidas.poll(10, java.util.concurrent.TimeUnit.SECONDS);
 		assertThat(entregue).isNotNull();
 		assertThat(entregue.getEnvelope().getRoutingKey()).isEqualTo("pedido-1");
+		assertThat(entregue.getProperties().getMessageId()).isEqualTo(envelope.messageId().toString());
 		assertThat(new String(entregue.getBody())).contains("PedidoCriado").contains("\"total\":10");
 	}
 }

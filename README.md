@@ -22,9 +22,8 @@ Requisitos completos: `docs/plan/01-requisitos-outbox-library.md`. Arquitetura e
 | Módulo | O que é | Depende de Spring? |
 |---|---|---|
 | [`outbox-core`](outbox-core/README.md) | Writer, relay, retry, quarentena, purga, métricas, tracing | Não |
-| [`outbox-broker-messaging`](outbox-broker-messaging/README.md) | `MessagePublisher` sobre `MessageSender` da messaging-library (SQS, SNS, Pub/Sub, Service Bus, JMS) | Não |
+| [`outbox-broker-messaging`](outbox-broker-messaging/README.md) | `MessagePublisher` sobre `MessageSender` da messaging-library (SQS, SNS, RabbitMQ, Pub/Sub, Service Bus, JMS) | Não |
 | [`outbox-broker-kafka`](outbox-broker-kafka/README.md) | `MessagePublisher` para Apache Kafka | Não |
-| [`outbox-broker-rabbitmq`](outbox-broker-rabbitmq/README.md) | `MessagePublisher` para RabbitMQ | Não |
 | [`outbox-spring-boot-starter`](outbox-spring-boot-starter/README.md) | Autoconfiguration, `@ConfigurationProperties`, `HealthIndicator` | Sim |
 
 ## Quickstart — com Spring Boot
