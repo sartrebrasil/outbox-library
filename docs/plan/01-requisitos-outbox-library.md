@@ -24,7 +24,7 @@ A biblioteca deve ser:
 | Garantia de entrega | **At-least-once.** Exactly-once não é oferecido nem simulado |
 | Retry | Infinito por padrão, com backoff exponencial e teto |
 | Quarentena (DLQ) | Estado `DEAD_LETTER` na própria tabela outbox, alcançado **somente** por `PermanentPublishException` |
-| Baseline de versão | JDK 21 + Spring Boot 3.x |
+| Baseline de versão | JDK 21 + Spring Boot 4.x |
 | Ordenação de mensagens | Por **fluxo** `(aggregate_id, destination)`, no escopo restrito definido em §3 e RF15 |
 | Contrato transacional | `Connection` explícita como assinatura canônica do core (RF19) |
 | Publicação da lib | Uso local (`mvn install`); sem publicação em repositório remoto |

@@ -2,8 +2,8 @@ package br.com.oobj.outbox.spring;
 
 import br.com.oobj.outbox.core.OutboxMessage;
 import br.com.oobj.outbox.core.OutboxWriter;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.datasource.DataSourceUtils;
@@ -56,7 +56,7 @@ public final class SpringOutboxWriter {
 		String json;
 		try {
 			json = objectMapper.writeValueAsString(payload);
-		} catch (JsonProcessingException e) {
+		} catch (JacksonException e) {
 			LOG.atError().setMessage("payload não serializou")
 					.addKeyValue("aggregateType", aggregateType)
 					.addKeyValue("payloadType", payload == null ? "null" : payload.getClass().getName())

@@ -6,7 +6,7 @@ import br.com.oobj.outbox.core.MetricsCollector;
 import br.com.oobj.outbox.core.OutboxConfig;
 import br.com.oobj.outbox.core.OutboxRelay;
 import br.com.oobj.outbox.core.PurgeJob;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
