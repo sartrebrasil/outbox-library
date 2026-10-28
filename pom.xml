@@ -14,7 +14,6 @@
         <module>outbox-broker-kafka</module>
         <module>outbox-spring-boot-starter</module>
         <module>outbox-broker-messaging</module>
-        <module>outbox-broker-rabbitmq</module>
     </modules>
 
     <properties>
