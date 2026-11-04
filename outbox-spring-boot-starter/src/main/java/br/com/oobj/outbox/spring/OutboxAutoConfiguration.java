@@ -9,6 +9,7 @@ import br.com.oobj.outbox.core.PurgeJob;
 import tools.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.health.contributor.HealthIndicator;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -53,8 +54,10 @@ public class OutboxAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
-	public SpringOutboxWriter springOutboxWriter(JdbcOutboxWriter delegate, DataSource dataSource, ObjectMapper objectMapper) {
-		return new SpringOutboxWriter(delegate, dataSource, objectMapper);
+	public SpringOutboxWriter springOutboxWriter(JdbcOutboxWriter delegate, DataSource dataSource, ObjectMapper objectMapper,
+			ObjectProvider<OutboxRelay> relay) {
+		// sem relay neste contexto (sem MessagePublisher) o aviso não faz nada; o provider evita a dependência circular
+		return new SpringOutboxWriter(delegate, dataSource, objectMapper, () -> relay.ifAvailable(OutboxRelay::wake));
 	}
 
 	/** Só existe se a aplicação registrou pelo menos um {@link MessagePublisher} (02 §4.2.3). */
