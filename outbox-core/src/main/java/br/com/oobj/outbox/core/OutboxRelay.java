@@ -26,8 +26,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -47,7 +48,9 @@ public final class OutboxRelay implements AutoCloseable {
 	private final DataSource dataSource;
 	private final OutboxConfig config;
 	private final Map<String, MessagePublisher> publishers;
-	private final ScheduledExecutorService executor;
+	private final ExecutorService executor;
+	private final Semaphore wakeups = new Semaphore(0);
+	private volatile boolean running;
 	private final OutboxMetrics metrics;
 	private final FailureSuppressor failureSuppressor = new FailureSuppressor();
 	private final AtomicReference<Instant> lastCycleCompletedAt = new AtomicReference<>(Instant.now());
@@ -58,7 +61,7 @@ public final class OutboxRelay implements AutoCloseable {
 		this.config = config;
 		this.publishers = publishers;
 		this.metrics = new OutboxMetrics(registry);
-		this.executor = Executors.newScheduledThreadPool(config.relayWorkers());
+		this.executor = Executors.newFixedThreadPool(config.relayWorkers());
 	}
 
 	/** Alimenta {@link MetricsCollector}: instante do último ciclo concluído, para detectar relay morto. */
@@ -72,14 +75,45 @@ public final class OutboxRelay implements AutoCloseable {
 				.addKeyValue("pollingInterval", config.pollingInterval())
 				.addKeyValue("candidateLimit", config.candidateLimit())
 				.log();
-		long intervalMillis = config.pollingInterval().toMillis();
+		running = true;
 		for (int worker = 0; worker < config.relayWorkers(); worker++) {
-			executor.scheduleWithFixedDelay(this::runOneCycleQuietly, 0, intervalMillis, TimeUnit.MILLISECONDS);
+			executor.execute(this::work);
+		}
+	}
+
+	/**
+	 * Acorda um worker ocioso: o próximo ciclo não espera o {@code pollingInterval}. Quem grava no outbox chama depois
+	 * do commit (o starter Spring faz isso sozinho); a gravação de outro processo segue pelo intervalo, que vira batimento.
+	 */
+	public void wake() {
+		wakeups.release();
+	}
+
+	/**
+	 * O laço de um worker: ciclo que achou fluxo roda de novo já (há mais a publicar); ciclo vazio, ou que falhou,
+	 * espera um {@link #wake()} ou o {@code pollingInterval}. A latência deixa de depender do intervalo e o custo
+	 * ocioso fica em uma consulta por intervalo por worker.
+	 */
+	private void work() {
+		long intervalMillis = config.pollingInterval().toMillis();
+		while (running) {
+			if (runOneCycleQuietly()) {
+				continue;
+			}
+			try {
+				wakeups.tryAcquire(intervalMillis, TimeUnit.MILLISECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
+				return;
+			}
 		}
 	}
 
 	@Override
 	public void close() {
+		running = false;
+		// cada worker ocioso sai da espera e vê running = false; o que está num ciclo termina o ciclo antes
+		wakeups.release(config.relayWorkers());
 		executor.shutdown();
 		try {
 			if (!executor.awaitTermination(config.shutdownTimeout().toMillis(), TimeUnit.MILLISECONDS)) {
@@ -92,15 +126,17 @@ public final class OutboxRelay implements AutoCloseable {
 		LOG.atInfo().setMessage("relay parado").log();
 	}
 
-	private void runOneCycleQuietly() {
+	/** Se o ciclo achou um fluxo; falha conta como ciclo vazio, para não girar contra um banco fora do ar. */
+	private boolean runOneCycleQuietly() {
 		try {
-			runOneCycle();
+			return runOneCycle();
 		} catch (Exception e) {
 			LOG.error("ciclo do relay falhou", e);
+			return false;
 		}
 	}
 
-	private void runOneCycle() throws SQLException {
+	private boolean runOneCycle() throws SQLException {
 		Timer.Sample cycleSample = metrics.startCycle();
 		try (Connection connection = dataSource.getConnection()) {
 			connection.setAutoCommit(false);
@@ -111,6 +147,7 @@ public final class OutboxRelay implements AutoCloseable {
 			}
 			connection.commit();
 			lastCycleCompletedAt.set(Instant.now());
+			return claimed.isPresent();
 		} finally {
 			metrics.cycleCompleted(cycleSample);
 		}
