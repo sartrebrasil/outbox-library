@@ -399,7 +399,7 @@ public final class OutboxRelay implements AutoCloseable {
 }
 ```
 
-Sem Spring, a aplicação instancia e chama `start()` (RF11). Com Spring, o starter registra o bean e o container cuida do ciclo. Por dentro é um `ScheduledExecutorService` com `relay.workers` threads (default `1`), cada uma executando o ciclo de §4.4 a cada `polling-interval`.
+Sem Spring, a aplicação instancia e chama `start()` (RF11). Com Spring, o starter registra o bean e o container cuida do ciclo. Por dentro são `relay.workers` threads (default `1`), cada uma num laço: o ciclo de §4.4 que reivindicou um fluxo roda de novo na hora (há mais a publicar); o ciclo vazio, ou que falhou, espera um `wake()` ou o `polling-interval`. O `wake()` é público e o starter o chama depois do commit de toda transação que gravou no outbox (uma vez por transação): a latência de publicação deixa de depender do intervalo, que vira batimento para o que outro processo gravou e para o que voltou do backoff. Sem trabalho, cada worker faz uma reivindicação por intervalo. O `close()` acorda os workers ociosos e espera o ciclo em curso terminar (0.2.0; até a 0.1.0 era um `ScheduledExecutorService` com um ciclo a cada `polling-interval` por worker, e o intervalo somava à latência de toda mensagem e limitava a vazão por worker a um fluxo por intervalo).
 
 Não há coordenação entre workers, nem dentro da instância nem entre instâncias: o advisory lock já é o mecanismo de exclusão mútua, e ele não distingue duas threads de dois processos. Subir o paralelismo é mudar um número.
 
@@ -743,7 +743,7 @@ Prefixo `outbox.`. O core recebe um record imutável já montado e **não lê pr
 
 | Propriedade | Default | Efeito |
 |---|---|---|
-| `polling-interval` | `1s` | Intervalo entre ciclos de reivindicação (§4.4) |
+| `polling-interval` | `1s` | Espera máxima de um worker ocioso entre reivindicações (§4.4, §4.6): com o `wake()` do starter é batimento, não latência |
 | `candidate-limit` | `50` | Teto de candidatos por scan (§4.2.2) |
 | `publish-timeout` | `5s` | Passado a cada `publish()` (§4.3.1) |
 | `session-timeout-margin` | `5s` | Somada a `publish-timeout` para formar o `idle_in_transaction_session_timeout` da sessão do relay (§4.3.1). A margem existe para que a rede de segurança do banco dispare depois do timeout do publisher, e não no lugar dele |
