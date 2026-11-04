@@ -72,6 +72,31 @@ class SpringOutboxWriterIT {
 	}
 
 	@Test
+	void avisaORelayUmaVezPorTransacaoDepoisDoCommitENuncaNoRollback() {
+		java.util.concurrent.atomic.AtomicInteger wakes = new java.util.concurrent.atomic.AtomicInteger();
+		JdbcOutboxWriter delegate = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry());
+		SpringOutboxWriter waking = new SpringOutboxWriter(delegate, dataSource, new ObjectMapper(), wakes::incrementAndGet);
+
+		transactionTemplate.executeWithoutResult(status -> {
+			waking.enqueue(OutboxMessage.of("Pedido", "pedido-1", null, "PedidoCriado", "{}", "pedidos.fifo"));
+			waking.enqueue(OutboxMessage.of("Pedido", "pedido-1", null, "PedidoPago", "{}", "pedidos.fifo"));
+			assertThat(wakes).hasValue(0); // antes do commit o relay não veria as linhas
+		});
+		assertThat(wakes).hasValue(1);
+
+		transactionTemplate.executeWithoutResult(status -> {
+			waking.enqueue(OutboxMessage.of("Pedido", "pedido-2", null, "PedidoCriado", "{}", "pedidos.fifo"));
+			status.setRollbackOnly();
+		});
+		assertThat(wakes).hasValue(1);
+
+		// o marcador da transação foi desfeito: a próxima transação da mesma thread avisa de novo
+		transactionTemplate.executeWithoutResult(status ->
+				waking.enqueue(OutboxMessage.of("Pedido", "pedido-3", null, "PedidoCriado", "{}", "pedidos.fifo")));
+		assertThat(wakes).hasValue(2);
+	}
+
+	@Test
 	void enqueueDentroDeTransacaoSpringGravaLinha() {
 		OutboxMessage message = OutboxMessage.of("Pedido", "pedido-1", null, "PedidoCriado", "{}", "pedidos.fifo");
 
