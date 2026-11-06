@@ -26,11 +26,29 @@ Requisitos completos: `docs/plan/01-requisitos-outbox-library.md`. Arquitetura e
 | [`outbox-broker-kafka`](outbox-broker-kafka/README.md) | `MessagePublisher` para Apache Kafka | Não |
 | [`outbox-spring-boot-starter`](outbox-spring-boot-starter/README.md) | Autoconfiguration, `@ConfigurationProperties`, `HealthIndicator` | Sim |
 
+## Importando via BOM
+
+```xml
+<dependencyManagement>
+    <dependencies>
+        <dependency>
+            <groupId>br.com.outbox</groupId>
+            <artifactId>outbox-bom</artifactId>
+            <version>0.2.0-SNAPSHOT</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+    </dependencies>
+</dependencyManagement>
+```
+
+Depois declare os módulos sem `<version>`.
+
 ## Quickstart — com Spring Boot
 
 ```xml
 <dependency>
-    <groupId>br.com.oobj.outbox</groupId>
+    <groupId>br.com.outbox</groupId>
     <artifactId>outbox-spring-boot-starter</artifactId>
 </dependency>
 ```
