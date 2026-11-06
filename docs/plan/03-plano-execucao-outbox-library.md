@@ -22,7 +22,7 @@ O `CLAUDE.md` do diretório pai descreve o serviço **Engines** (DF-e, Spring In
 
 ## 3. Estrutura Maven
 
-`pom.xml` raiz vira **parent** (`packaging pom`), com `groupId br.com.oobj.outbox` e versão `0.1.0-SNAPSHOT` — `1.0.0` só depois da Fase 2 (`02` §1). O `Main.java` e o pacote `org.example` são removidos na primeira tarefa.
+`pom.xml` raiz vira **parent** (`packaging pom`), com `groupId br.com.outbox` e versão `0.1.0-SNAPSHOT` — `1.0.0` só depois da Fase 2 (`02` §1). O `Main.java` e o pacote `org.example` são removidos na primeira tarefa.
 
 **Nascem agora apenas `parent` e `outbox-core`.** Os quatro módulos de broker e o starter entram no `<modules>` na fase que os implementa. Um `pom.xml` vazio criado hoje não é preparação, é arquivo para manter; criar um módulo Maven no dia que ele tem conteúdo custa dez linhas.
 

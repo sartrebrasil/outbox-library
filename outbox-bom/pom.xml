@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Sem <parent>: o import de um BOM herda o dependencyManagement do pai, e o do pom raiz
+        (junit, slf4j, jackson...) vazaria para a aplicação consumidora. A versão abaixo precisa
+        acompanhar a do pom raiz (mvn versions:set -DprocessAllModules mantém os dois em sincronia).
+    -->
+    <groupId>br.com.outbox</groupId>
+    <artifactId>outbox-bom</artifactId>
+    <version>0.2.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>br.com.outbox</groupId>
+                <artifactId>outbox-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>br.com.outbox</groupId>
+                <artifactId>outbox-broker-kafka</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>br.com.outbox</groupId>
+                <artifactId>outbox-broker-messaging</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>br.com.outbox</groupId>
+                <artifactId>outbox-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+</project>

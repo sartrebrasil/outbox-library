@@ -41,7 +41,7 @@ A biblioteca deve ser:
 | Montagem do envelope | Corpo JSON produzido pelo core, com escritor mínimo próprio (RF02.2, RF06.3) |
 | Cálculo da métrica de idade | Sobre todas as pendentes, nunca derivado do scan do relay (RF32.2) |
 | Configuração | Record imutável no core; properties só no starter (RF10.1) |
-| Coordenadas do artefato | `br.com.oobj.outbox`, SemVer, `1.0.0` só depois da Fase 2 |
+| Coordenadas do artefato | `br.com.outbox`, SemVer, `1.0.0` só depois da Fase 2 |
 
 ## 3. Escopo da Garantia de Ordenação
 
@@ -215,7 +215,7 @@ Pendências eram lacunas conhecidas de projeto; questões em aberto são decisõ
 | **P06** | Modelo de mensagem e serialização | `payload` como `String` já serializada, Jackson só no starter. SPI de serialização descartada como interface de uma implementação só | RF02.1 |
 | **P07** | Ciclo de vida e concorrência do relay | `AutoCloseable` com `workers` threads (default `1`), cada uma com sua conexão, sem coordenação além do lock | RF11.1, RF25.3 |
 | **P08** | Gauges globais e multi-instância | Todas as instâncias reportam; agregação documentada como `max`, nunca `sum`; coletor com intervalo próprio | RF33.1 |
-| **P09** | Identidade do artefato | `br.com.oobj.outbox`, SemVer, licença interna. `1.0.0` só depois da Fase 2, quando um segundo publisher tiver validado a SPI | Plano §1 |
+| **P09** | Identidade do artefato | `br.com.outbox`, SemVer, licença interna. `1.0.0` só depois da Fase 2, quando um segundo publisher tiver validado a SPI | Plano §1 |
 | **P10** | Encerramento do relay | Requisito na forma negativa: não construir limpeza de lock órfão, porque não existe lock órfão | RF11.2 |
 
 ### 8.2 Questões em aberto
