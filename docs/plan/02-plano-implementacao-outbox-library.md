@@ -16,7 +16,7 @@ outbox-broker-messaging    → MessagePublisher sobre MessageSender da messaging
 outbox-spring-boot-starter → autoconfiguration + sobrecarga enqueue(msg)
 ```
 
-Coordenadas: `groupId` `br.com.outbox`, artifactIds iguais aos nomes acima, versionamento semântico, licença proprietária interna — coerente com a decisão de não publicar em repositório remoto.
+Coordenadas: `groupId` `com.example`, artifactIds iguais aos nomes acima, versionamento semântico, licença proprietária interna — coerente com a decisão de não publicar em repositório remoto.
 
 **A versão só chega a `1.0.0` depois da Fase 2.** Enquanto existir um único `MessagePublisher`, a SPI não foi validada (RF06.2) e estabilizar a versão seria prometer compatibilidade sobre uma interface que ninguém tentou implementar duas vezes. Até lá, `0.x`, onde quebrar é permitido e esperado.
 

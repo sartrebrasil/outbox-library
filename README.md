@@ -32,7 +32,7 @@ Requisitos completos: `docs/plan/01-requisitos-outbox-library.md`. Arquitetura e
 <dependencyManagement>
     <dependencies>
         <dependency>
-            <groupId>br.com.outbox</groupId>
+            <groupId>com.example</groupId>
             <artifactId>outbox-bom</artifactId>
             <version>0.2.0-SNAPSHOT</version>
             <type>pom</type>
@@ -48,7 +48,7 @@ Depois declare os módulos sem `<version>`.
 
 ```xml
 <dependency>
-    <groupId>br.com.outbox</groupId>
+    <groupId>com.example</groupId>
     <artifactId>outbox-spring-boot-starter</artifactId>
 </dependency>
 ```
