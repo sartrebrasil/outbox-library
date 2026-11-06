@@ -1,1 +1,1 @@
-br.com.outbox.spring.OutboxAutoConfiguration
+com.example.outbox.spring.OutboxAutoConfiguration
