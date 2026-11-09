@@ -10,8 +10,9 @@ lógica que não exista aqui.
 
 ## Schema
 
-`V1__outbox_message.sql` (Flyway, `classpath:db/migration`) vai dentro deste jar — aponte
-sua ferramenta de migração para ele em vez de copiar o SQL.
+`V202609211401__outbox_message.sql` (Flyway, `classpath:db/outbox/postgresql`) vai dentro
+deste jar — aponte sua ferramenta de migração para ele em vez de copiar o SQL. A versão é
+timestamp: use o mesmo padrão nas migrações da aplicação (detalhes no README raiz).
 
 ## Escrever (dentro da transação de negócio)
 

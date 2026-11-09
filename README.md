@@ -100,10 +100,14 @@ Detalhes: [`outbox-core/README.md`](outbox-core/README.md).
 
 ## Schema
 
-`outbox-core` publica a migração Flyway `V1__outbox_message.sql` no próprio jar
-(`classpath:db/migration`). Aponte seu `Flyway`/`flyway-maven-plugin` para
-`classpath:db/migration` deste jar, ou copie o SQL — o schema é público, não um detalhe
-de implementação.
+`outbox-core` publica a migração Flyway `V202609211401__outbox_message.sql` no próprio jar,
+em `classpath:db/outbox/postgresql`. Inclua esse location na sua configuração do Flyway
+(no Spring Boot: `spring.flyway.locations=...,classpath:db/outbox/{vendor}`), ou copie o
+SQL — o schema é público, não um detalhe de implementação.
+
+A versão é um timestamp (`V<yyyyMMddHHmm>`) para não colidir com as migrações da aplicação
+nem de outras bibliotecas no mesmo histórico do Flyway. Use timestamp também nas suas
+migrações e ligue `out-of-order` (`spring.flyway.out-of-order=true`).
 
 ## Operação
 

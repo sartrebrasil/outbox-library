@@ -30,7 +30,7 @@ public abstract class AbstractPostgresIT {
 		}
 		Flyway.configure()
 				.dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-				.locations("classpath:db/migration")
+				.locations("classpath:db/outbox/postgresql")
 				.load()
 				.migrate();
 	}
