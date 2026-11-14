@@ -573,6 +573,7 @@ Entregue na Fase 1, junto com o núcleo. O relay é assíncrono, distribuído en
 | `outbox_purge_deleted_total` | counter | — | Eficácia da retenção (§6) |
 | `outbox_purge_duration` | timer | — | Duração de cada ciclo de purga, com sucesso ou falha. Cresce junto com o backlog de `PUBLISHED` a apagar |
 | `outbox_purge_failures_total` | counter | — | Ciclos de purga que falharam. **Por instância**, como o do coletor. Sem ele, a tabela cresce sem aviso e o único rastro é um `ERROR` no log |
+| `outbox_quarantined_total` | counter | `destination` | Taxa de entrada em quarentena. O gauge `outbox_dead_letter_count` mostra o estoque; este mostra quando começou e a que ritmo |
 | `outbox_metrics_collector_failures_total` | counter | — | Falhas do coletor de gauges. **Por instância**, ao contrário dos gauges: cada coletor tem a sua. Enquanto sobe, os gauges globais estão velhos (a idade continua crescendo, o resto não) |
 | `outbox_metrics_collector_duration` | timer | — | Duração de cada rodada do coletor, com sucesso ou falha. Vigia o custo do `count(*)` conforme o backlog cresce |
 | `outbox_multi_pending_streams` | gauge | — | Fluxos com dois ou mais pendentes simultâneos. Existe para responder à questão em aberto 1 dos requisitos: se este número for consistentemente próximo de zero, toda a reivindicação por fluxo está sendo paga por um caso que quase não ocorre |

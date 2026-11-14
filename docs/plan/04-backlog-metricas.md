@@ -47,7 +47,7 @@ nenhum rótulo; nunca `aggregate_id`, `message_id` ou `trace_id`) e entra na tab
 - [x] **N4. Purga observável**: `outbox_purge_duration` (timer) e `outbox_purge_failures_total`
   (counter). A duração já é calculada para o log em `PurgeJob.runOneCycle`.
 
-- [ ] **N5. `outbox_quarantined_total{destination}`**: counter da taxa de entrada em quarentena.
+- [x] **N5. `outbox_quarantined_total{destination}`**: counter da taxa de entrada em quarentena.
   O gauge `outbox_dead_letter_count` mostra o estoque, não o fluxo. Onde: `OutboxRelay.quarantine`.
 
 - [ ] **N6. `outbox_publish_attempts{destination}`**: summary do `attempts` no momento do

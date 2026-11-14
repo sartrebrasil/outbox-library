@@ -85,6 +85,11 @@ final class OutboxMetrics {
 		registry.counter("outbox_purge_failures_total").increment();
 	}
 
+	/** Entradas em quarentena: o gauge de dead letter mostra o estoque, este mostra a taxa de entrada. */
+	void quarantined(String destination) {
+		registry.counter("outbox_quarantined_total", Tags.of("destination", destination)).increment();
+	}
+
 	void purgeDeleted(long count) {
 		registry.counter("outbox_purge_deleted_total").increment(count);
 	}

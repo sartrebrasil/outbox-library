@@ -55,7 +55,8 @@ class RetryQuarentenaIT extends AbstractPostgresIT {
 
 		InMemoryMessagePublisher publisherOk = new InMemoryMessagePublisher();
 		OutboxConfig config = OutboxConfig.defaults().withPollingInterval(Duration.ofMillis(30));
-		OutboxRelay relay = new OutboxRelay(dataSource(), config, new SimpleMeterRegistry(),
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		OutboxRelay relay = new OutboxRelay(dataSource(), config, registry,
 				Map.of("pedidos.fifo", new AlwaysFailPublisher(), "outros.topico", publisherOk));
 		try {
 			relay.start();
@@ -68,6 +69,10 @@ class RetryQuarentenaIT extends AbstractPostgresIT {
 
 		assertThat(statusOf(represada.messageId())).isEqualTo("PENDING");
 		assertThat(publisherOk.published()).hasSize(1);
+		// uma quarentena, e só do destino que falhou — o fluxo congelado não gera entradas novas
+		assertThat(registry.get("outbox_quarantined_total").tag("destination", "pedidos.fifo").counter().count())
+				.isEqualTo(1.0);
+		assertThat(registry.find("outbox_quarantined_total").tag("destination", "outros.topico").counter()).isNull();
 	}
 
 	private void enqueueAndCommit(OutboxMessage message) throws Exception {

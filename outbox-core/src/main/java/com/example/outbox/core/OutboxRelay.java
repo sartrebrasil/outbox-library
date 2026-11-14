@@ -271,6 +271,7 @@ public final class OutboxRelay implements AutoCloseable {
 			update.setString(2, fluxo.destination());
 			update.executeUpdate();
 		}
+		metrics.quarantined(fluxo.destination());
 		LOG.atError().setMessage("Falha permanente na publicação, mensagem em DEAD_LETTER")
 				.addKeyValue("aggregateId", message.aggregateId())
 				.addKeyValue("destination", fluxo.destination())
