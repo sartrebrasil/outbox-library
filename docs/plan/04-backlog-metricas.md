@@ -44,7 +44,7 @@ nenhum rótulo; nunca `aggregate_id`, `message_id` ou `trace_id`) e entra na tab
   `MetricasIT.cicloQueFalhaContaOutcomeError` prova a cobertura. Sem alerta de taxa de erro, por
   §8.2 ("alertar na idade"): a falha prolongada já sobe `outbox_oldest_pending_age_seconds`.
 
-- [ ] **N4. Purga observável**: `outbox_purge_duration` (timer) e `outbox_purge_failures_total`
+- [x] **N4. Purga observável**: `outbox_purge_duration` (timer) e `outbox_purge_failures_total`
   (counter). A duração já é calculada para o log em `PurgeJob.runOneCycle`.
 
 - [ ] **N5. `outbox_quarantined_total{destination}`**: counter da taxa de entrada em quarentena.

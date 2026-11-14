@@ -45,6 +45,7 @@ public final class PurgeJob implements AutoCloseable {
 		this.dataSource = dataSource;
 		this.config = config;
 		this.metrics = new OutboxMetrics(registry);
+		metrics.registerPurgeMeters();
 	}
 
 	public void start() {
@@ -66,10 +67,15 @@ public final class PurgeJob implements AutoCloseable {
 	}
 
 	private void runOneCycleQuietly() {
+		Instant start = Instant.now();
 		try {
 			runOneCycle();
-		} catch (SQLException e) {
+		} catch (SQLException | RuntimeException e) {
+			// RuntimeException também: sem capturá-la o scheduleWithFixedDelay cancela os ciclos seguintes em silêncio
+			metrics.purgeFailed();
 			LOG.error("ciclo de purga falhou", e);
+		} finally {
+			metrics.purgeDuration(java.time.Duration.between(start, Instant.now()));
 		}
 	}
 

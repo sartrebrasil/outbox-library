@@ -3,9 +3,12 @@ package com.example.outbox.core;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
+import javax.sql.DataSource;
+import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -48,6 +51,32 @@ class PurgeJobIT extends AbstractPostgresIT {
 		assertThat(existe(recente)).isTrue();
 		assertThat(existe(deadLetter)).isTrue();
 		assertThat(registry.get("outbox_purge_deleted_total").counter().count()).isEqualTo(3.0);
+		assertThat(registry.get("outbox_purge_duration").timer().count()).isGreaterThanOrEqualTo(1);
+		assertThat(registry.get("outbox_purge_failures_total").counter().count()).isZero();
+	}
+
+	@Test
+	void purgeQueFalhaContaFalhasEContinuaAgendada() throws Exception {
+		DataSource bancoFora = (DataSource) Proxy.newProxyInstance(getClass().getClassLoader(),
+				new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+					throw new SQLException("banco fora");
+				});
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		OutboxConfig config = OutboxConfig.defaults().withPurgeInterval(Duration.ofMillis(50));
+		PurgeJob purgeJob = new PurgeJob(bancoFora, config, registry);
+		try {
+			purgeJob.start();
+			Instant deadline = Instant.now().plusSeconds(5);
+			while (Instant.now().isBefore(deadline)
+					&& registry.get("outbox_purge_failures_total").counter().count() < 2) {
+				Thread.sleep(30);
+			}
+		} finally {
+			purgeJob.close();
+		}
+		// >= 2: a falha não cancelou o agendamento
+		assertThat(registry.get("outbox_purge_failures_total").counter().count()).isGreaterThanOrEqualTo(2.0);
+		assertThat(registry.get("outbox_purge_duration").timer().count()).isGreaterThanOrEqualTo(2);
 	}
 
 	private void awaitRowGone(UUID id) throws Exception {

@@ -71,6 +71,20 @@ final class OutboxMetrics {
 		registry.counter("outbox_retry_scheduled_total", Tags.of("destination", destination)).increment();
 	}
 
+	/** Registra as séries da purga já em zero: sem isso, a primeira falha não gera {@code increase()}. */
+	void registerPurgeMeters() {
+		registry.counter("outbox_purge_failures_total");
+		registry.timer("outbox_purge_duration");
+	}
+
+	void purgeDuration(Duration duration) {
+		registry.timer("outbox_purge_duration").record(duration);
+	}
+
+	void purgeFailed() {
+		registry.counter("outbox_purge_failures_total").increment();
+	}
+
 	void purgeDeleted(long count) {
 		registry.counter("outbox_purge_deleted_total").increment(count);
 	}
