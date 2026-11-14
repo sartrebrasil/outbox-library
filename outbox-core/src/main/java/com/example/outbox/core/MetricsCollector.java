@@ -48,6 +48,7 @@ public final class MetricsCollector implements AutoCloseable {
 	private final AtomicLong blockedStreams = new AtomicLong();
 	private final AtomicLong oldestDeadLetterAgeSeconds = new AtomicLong();
 	private final AtomicLong multiPendingStreams = new AtomicLong();
+	private final AtomicLong backoffPendingCount = new AtomicLong();
 	private final Counter collectorFailures;
 	private final Timer collectorDuration;
 	private final Map<String, AtomicLong> deadLetterCountByDestination = new ConcurrentHashMap<>();
@@ -66,6 +67,7 @@ public final class MetricsCollector implements AutoCloseable {
 		registry.gauge("outbox_blocked_streams", blockedStreams);
 		registry.gauge("outbox_oldest_dead_letter_age_seconds", oldestDeadLetterAgeSeconds);
 		registry.gauge("outbox_multi_pending_streams", multiPendingStreams);
+		registry.gauge("outbox_backoff_pending_count", backoffPendingCount);
 		// POR INSTÂNCIA, ao contrário dos demais: separa "este relay morreu" de "há backlog" (02 §8.1)
 		Gauge.builder("outbox_relay_last_cycle_age_seconds", this, c -> c.secondsSinceLastRelayCycle(Instant.now()))
 				.strongReference(true)
@@ -129,6 +131,13 @@ public final class MetricsCollector implements AutoCloseable {
 					    SELECT 1 FROM outbox_message WHERE status = 'PENDING'
 					    GROUP BY aggregate_id, destination HAVING count(*) > 1
 					) fluxos_com_multiplas_pendentes
+					"""));
+
+			// só o que está em backoff: o range scan de idx_outbox_pending para antes das 'infinity' (quarentena)
+			// e não olha o backlog disponível, então o custo acompanha o número de retries, não o do backlog
+			backoffPendingCount.set(scalarLong(connection, """
+					SELECT count(*) FROM outbox_message
+					WHERE status = 'PENDING' AND available_at > now() AND available_at < 'infinity'
 					"""));
 
 			collectDeadLetterByDestination(connection);

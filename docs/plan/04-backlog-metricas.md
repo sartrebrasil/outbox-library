@@ -62,7 +62,7 @@ nenhum rótulo; nunca `aggregate_id`, `message_id` ou `trace_id`) e entra na tab
   por instância da lista: no backend ele **não** é agregado com `max`. Documentar isso junto da
   regra de §8.1.
 
-- [ ] **N9. `outbox_backoff_pending_count`**: gauge das pendentes com
+- [x] **N9. `outbox_backoff_pending_count`**: gauge das pendentes com
   `available_at > now()` e diferente de `'infinity'`. Diferencia backlog saudável de backlog em
   retry. Mais uma consulta no `MetricsCollector`; verificar o custo antes, junto com N2.
 

@@ -52,6 +52,23 @@ class MetricsCollectorIT extends AbstractPostgresIT {
 	}
 
 	@Test
+	void backoffPendingCountSoContaPendentesAdiadasNaoQuarentena() throws Exception {
+		insertRow("PENDING", "pedidos.fifo");                       // disponível agora: não conta
+		insertRowAvailableAt("now() + interval '1 hour'");          // em backoff: conta
+		insertRowAvailableAt("'infinity'");                         // represada por quarentena: não conta
+
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		MetricsCollector collector = new MetricsCollector(dataSource(), registry, Duration.ofMillis(50), Instant::now);
+		try {
+			awaitGaugeAtLeast(registry, "outbox_backoff_pending_count", 1.0);
+			Thread.sleep(150); // mais uma rodada: o valor tem que estabilizar em 1, não passar de 1
+			assertThat(registry.get("outbox_backoff_pending_count").gauge().value()).isEqualTo(1.0);
+		} finally {
+			collector.close();
+		}
+	}
+
+	@Test
 	void deadLetterCountVoltaAZeroQuandoQuarentenaEResolvida() throws Exception {
 		insertRow("DEAD_LETTER", "resolvido.fifo");
 
@@ -149,6 +166,18 @@ class MetricsCollectorIT extends AbstractPostgresIT {
 			Thread.sleep(30);
 		}
 		throw new AssertionError("gauge " + name + " não chegou a " + minimo + " dentro do prazo");
+	}
+
+	private void insertRowAvailableAt(String availableAtSql) throws Exception {
+		try (Connection connection = newConnection();
+				var insert = connection.prepareStatement(
+						"INSERT INTO outbox_message (id, aggregate_type, aggregate_id, event_type, payload, destination, status, available_at) "
+								+ "VALUES (?, 'Pedido', ?, 'PedidoCriado', '{}', 'pedidos.fifo', 'PENDING', " + availableAtSql + ")")) {
+			insert.setObject(1, UUID.randomUUID());
+			insert.setString(2, "pedido-" + UUID.randomUUID());
+			insert.executeUpdate();
+			connection.commit();
+		}
 	}
 
 	private void insertRow(String status, String destination) throws Exception {
