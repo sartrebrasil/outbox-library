@@ -27,6 +27,10 @@ class JdbcOutboxWriterIT extends AbstractPostgresIT {
 			writer.enqueue(connection, message);
 			connection.commit();
 		}
+		// {"total":10} = 12 bytes
+		var bytes = registry.get("outbox_enqueue_payload_bytes").tag("destination", "pedidos.fifo").summary();
+		assertThat(bytes.count()).isEqualTo(1);
+		assertThat(bytes.totalAmount()).isEqualTo(12.0);
 
 		try (Connection connection = newConnection();
 				PreparedStatement select = connection.prepareStatement(
@@ -60,13 +64,16 @@ class JdbcOutboxWriterIT extends AbstractPostgresIT {
 	@Test
 	void enqueueRejeitaPayloadMaiorQueOLimiteDoDestino() throws Exception {
 		OutboxConfig config = OutboxConfig.defaults().withPayloadLimits(new OutboxConfig.PayloadLimits(10L, Map.of()));
-		JdbcOutboxWriter smallLimitWriter = new JdbcOutboxWriter(config, new SimpleMeterRegistry());
+		SimpleMeterRegistry smallRegistry = new SimpleMeterRegistry();
+		JdbcOutboxWriter smallLimitWriter = new JdbcOutboxWriter(config, smallRegistry);
 		OutboxMessage message = OutboxMessage.of(
 				"Pedido", "pedido-1", null, "PedidoCriado", "{\"total\":\"muito grande pro limite\"}", "pedidos.fifo");
 
 		try (Connection connection = newConnection()) {
 			assertThatThrownBy(() -> smallLimitWriter.enqueue(connection, message))
 					.isInstanceOf(PayloadTooLargeException.class);
+			// a rejeitada também é medida: mostra por quanto estourou o limite de 10 bytes
+			assertThat(smallRegistry.get("outbox_enqueue_payload_bytes").summary().totalAmount()).isGreaterThan(10.0);
 		}
 	}
 }

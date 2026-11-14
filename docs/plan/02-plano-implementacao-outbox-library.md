@@ -555,6 +555,7 @@ Entregue na Fase 1, junto com o núcleo. O relay é assíncrono, distribuído en
 
 | Métrica | Tipo | Rótulos | Para que serve |
 |---|---|---|---|
+| `outbox_enqueue_payload_bytes` | summary | `destination` | Tamanho do payload em bytes, medido antes da validação (§3.5): as rejeitadas também entram. Mostra o quanto as mensagens chegam perto do limite antes de virarem `rejected` |
 | `outbox_enqueue_duration` | timer | `aggregate_type`, `destination` | Latência dentro da transação de negócio. Separa degradação da outbox de degradação do domínio |
 | `outbox_enqueue_total` | counter | `aggregate_type`, `destination`, `outcome` | Volume de escrita. `outcome` distingue rejeição na validação (§3.5) |
 | `outbox_pending_count` | gauge | — | Tamanho do backlog |

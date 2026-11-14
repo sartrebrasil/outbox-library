@@ -82,6 +82,7 @@ public final class JdbcOutboxWriter implements OutboxWriter {
 
 	private void validateSize(OutboxMessage message) {
 		int payloadBytes = message.payload().getBytes(StandardCharsets.UTF_8).length;
+		metrics.enqueuePayloadBytes(message.destination(), payloadBytes);
 		long maxBytes = payloadLimits.maxBytesFor(message.destination());
 		if (payloadBytes > maxBytes) {
 			throw new PayloadTooLargeException(message.destination(), payloadBytes, maxBytes);

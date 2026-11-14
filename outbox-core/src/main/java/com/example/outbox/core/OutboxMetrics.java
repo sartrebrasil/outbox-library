@@ -31,6 +31,11 @@ final class OutboxMetrics {
 				.increment();
 	}
 
+	/** Tamanho do payload em bytes, medido antes da validação: as rejeitadas também entram, e mostram por quanto estouraram. */
+	void enqueuePayloadBytes(String destination, int bytes) {
+		registry.summary("outbox_enqueue_payload_bytes", Tags.of("destination", destination)).record(bytes);
+	}
+
 	void claim(String outcome) {
 		registry.counter("outbox_relay_claim_total", Tags.of("outcome", outcome)).increment();
 	}
