@@ -155,7 +155,7 @@ saúde da purga e do coletor, sem rótulo, nascem em zero.
 | `outbox_quarantined_total` | counter | `destination` | Taxa de **entrada** em quarentena. O gauge `outbox_dead_letter_count` mostra o estoque; este mostra quando começou e a que ritmo | `sum` |
 | `outbox_relay_claim_total` | counter | `outcome` = `acquired` \| `contended` \| `all_contended` \| `empty` | Saúde do paralelismo. `contended` conta **candidatos** que perderam o lock; os outros contam **ciclos**. `all_contended` alto = colisão de `hashtext` ou poucos fluxos quentes; `empty` alto é só ociosidade | `sum` |
 | `outbox_relay_batch_size` | summary | — | Mensagens publicadas por reivindicação de fluxo (só registra quando publicou algo) | `sum` |
-| `outbox_relay_cycle_duration` | timer | `outcome` = `acquired` \| `empty` \| `error` | Duração da transação do relay. Alerte sobre `outcome="acquired"`: ciclos vazios, a maioria no polling ocioso, diluem o percentil. `outcome="error"` (em `_count`) é o registro de ciclos que falharam | `sum` das taxas |
+| `outbox_relay_cycle_duration` | timer | `outcome` = `acquired` \| `empty` \| `error` | Duração da transação do relay. Alerte sobre `outcome="acquired"`: ciclos vazios, a maioria no polling ocioso, diluem o máximo e os percentis. `outcome="error"` (em `_count`) é o registro de ciclos que falharam | `sum` das taxas |
 
 ### Purga — toda instância com `PurgeJob`, inclusive só-escritora
 
@@ -246,10 +246,9 @@ groups:
         annotations:
           summary: "DEAD_LETTER vivo há dias — todo evento novo do fluxo se acumula em 'infinity' sem prazo."
 
-      # Exige quantis publicados: management.metrics.distribution.percentiles.outbox_relay_cycle_duration=0.99
-      # (timers não os publicam por padrão). Sem isso a série não existe e o alerta nunca dispara.
+      # _max existe por padrão (quantis não): é o maior ciclo da janela recente do Micrometer, não um percentil.
       - alert: OutboxCicloDoRelayLento
-        expr: max(outbox_relay_cycle_duration_seconds{outcome="acquired",quantile="0.99"}) > 4   # aproxime do publish-timeout
+        expr: max(outbox_relay_cycle_duration_seconds_max{outcome="acquired"}) > 4   # aproxime do publish-timeout
         labels: { severity: media }
         annotations:
           summary: "Transação do relay se aproximando do timeout — risco de horizonte de vacuum (02 §4.3)."
