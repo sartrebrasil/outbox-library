@@ -44,6 +44,8 @@ class MetricsCollectorIT extends AbstractPostgresIT {
 		MetricsCollector collector = new MetricsCollector(dataSource(), registry, Duration.ofMillis(50), () -> relayMortoDesde);
 		try {
 			awaitGaugeAtLeast(registry, "outbox_oldest_pending_age_seconds", 100.0);
+			// por instância: mesmo valor do segundo termo da idade, mas sem misturar o backlog
+			assertThat(registry.get("outbox_relay_last_cycle_age_seconds").gauge().value()).isGreaterThanOrEqualTo(120.0);
 		} finally {
 			collector.close();
 		}

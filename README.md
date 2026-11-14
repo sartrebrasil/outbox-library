@@ -141,7 +141,8 @@ WHERE aggregate_id = '...' AND destination = '...' AND status <> 'PUBLISHED';
 
 **Regra de agregação: `max`, nunca `sum`, entre instâncias.** Os gauges abaixo descrevem
 o estado do banco, não da instância que os publica — com N relays, todos reportam o mesmo
-número, e somar multiplica o backlog por N.
+número, e somar multiplica o backlog por N. A exceção é `outbox_relay_last_cycle_age_seconds`,
+que mede a instância, não o banco: leia-a por instância (ou com `min`, para saber se algum relay está vivo).
 
 ```yaml
 groups:

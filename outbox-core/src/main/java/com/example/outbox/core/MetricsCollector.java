@@ -66,6 +66,10 @@ public final class MetricsCollector implements AutoCloseable {
 		registry.gauge("outbox_blocked_streams", blockedStreams);
 		registry.gauge("outbox_oldest_dead_letter_age_seconds", oldestDeadLetterAgeSeconds);
 		registry.gauge("outbox_multi_pending_streams", multiPendingStreams);
+		// POR INSTÂNCIA, ao contrário dos demais: separa "este relay morreu" de "há backlog" (02 §8.1)
+		Gauge.builder("outbox_relay_last_cycle_age_seconds", this, c -> c.secondsSinceLastRelayCycle(Instant.now()))
+				.strongReference(true)
+				.register(registry);
 		executor.scheduleWithFixedDelay(this::collectQuietly, 0, interval.toMillis(), TimeUnit.MILLISECONDS);
 	}
 
@@ -81,8 +85,11 @@ public final class MetricsCollector implements AutoCloseable {
 		if (fromTable > 0) {
 			fromTable += Duration.between(lastCollectedAt, now).getSeconds();
 		}
-		long sinceLastRelayCycle = Duration.between(lastRelayCycleCompletedAt.get(), now).getSeconds();
-		return Math.max(fromTable, sinceLastRelayCycle);
+		return Math.max(fromTable, secondsSinceLastRelayCycle(now));
+	}
+
+	private long secondsSinceLastRelayCycle(Instant now) {
+		return Duration.between(lastRelayCycleCompletedAt.get(), now).getSeconds();
 	}
 
 	private void collectQuietly() {

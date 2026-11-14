@@ -57,7 +57,7 @@ nenhum rótulo; nunca `aggregate_id`, `message_id` ou `trace_id`) e entra na tab
   chegam perto do limite antes de virarem `rejected`. O tamanho já é calculado em
   `JdbcOutboxWriter.validateSize`.
 
-- [ ] **N8. `outbox_relay_last_cycle_age_seconds`**: gauge por instância. Separa "relay morto" de
+- [x] **N8. `outbox_relay_last_cycle_age_seconds`**: gauge por instância. Separa "relay morto" de
   "backlog real", que hoje se misturam em `outbox_oldest_pending_age_seconds`. É o único gauge
   por instância da lista: no backend ele **não** é agregado com `max`. Documentar isso junto da
   regra de §8.1.
