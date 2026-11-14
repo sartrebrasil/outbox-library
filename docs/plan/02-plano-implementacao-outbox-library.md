@@ -565,7 +565,7 @@ Entregue na Fase 1, junto com o núcleo. O relay é assíncrono, distribuído en
 | `outbox_relay_claim_total` | counter | `outcome` (`acquired`, `contended`, `empty`) | Saúde do paralelismo. `contended` alto indica colisão de `hashtext` ou poucos fluxos quentes |
 | `outbox_relay_batch_size` | summary | — | Mensagens publicadas por reivindicação |
 | `outbox_relay_cycle_duration` | timer | `outcome` (`acquired`, `empty`, `error`) | Duração da transação do relay. Vigia o risco de transação longa (§4.3). Alertar sobre `outcome="acquired"`: os ciclos vazios, a maioria no polling ocioso, diluem o percentil |
-| `outbox_published_total` | counter | `destination`, `broker` | Throughput |
+| `outbox_published_total` | counter | `destination` | Throughput. Sem rótulo de broker: cada `destination` já mapeia para um único publisher, então o rótulo não separaria nada |
 | `outbox_publish_failures_total` | counter | `destination`, `classification` (`permanent`, `transient`) | Distribuição de falhas |
 | `outbox_publish_duration` | timer | `destination`, `outcome` | Latência do broker |
 | `outbox_retry_scheduled_total` | counter | `destination` | Volume de reprocessamento |

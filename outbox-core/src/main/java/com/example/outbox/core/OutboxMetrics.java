@@ -48,8 +48,8 @@ final class OutboxMetrics {
 		sample.stop(registry.timer("outbox_relay_cycle_duration", Tags.of("outcome", outcome)));
 	}
 
-	void published(String destination, String broker) {
-		registry.counter("outbox_published_total", Tags.of("destination", destination, "broker", broker)).increment();
+	void published(String destination) {
+		registry.counter("outbox_published_total", Tags.of("destination", destination)).increment();
 	}
 
 	void publishFailure(String destination, String classification) {
