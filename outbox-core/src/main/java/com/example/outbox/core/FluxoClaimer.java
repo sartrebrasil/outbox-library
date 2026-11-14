@@ -42,7 +42,8 @@ final class FluxoClaimer {
 	private static final String TRY_LOCK_SQL = "SELECT pg_try_advisory_xact_lock(?, hashtext(? || '|' || ?))";
 
 	static Optional<Fluxo> claimNext(Connection connection, int candidateLimit, OutboxMetrics metrics) throws SQLException {
-		for (Fluxo candidate : candidates(connection, candidateLimit)) {
+		List<Fluxo> candidates = candidates(connection, candidateLimit);
+		for (Fluxo candidate : candidates) {
 			if (tryLock(connection, candidate)) {
 				metrics.claim("acquired");
 				LOG.atDebug().setMessage("fluxo reivindicado").addKeyValue("destination", candidate.destination()).log();
@@ -52,7 +53,8 @@ final class FluxoClaimer {
 			LOG.atTrace().setMessage("contenção de lock, fluxo descartado")
 					.addKeyValue("destination", candidate.destination()).log();
 		}
-		metrics.claim("empty");
+		// sem candidato é ocioso; com candidatos e nenhum lock obtido é contenção — alarmes opostos
+		metrics.claim(candidates.isEmpty() ? "empty" : "all_contended");
 		return Optional.empty();
 	}
 

@@ -294,7 +294,7 @@ for (Fluxo fluxo : candidatos) {
     }
     metrics.claim("contended");
 }
-metrics.claim("empty");
+metrics.claim(candidates.isEmpty() ? "empty" : "all_contended");
 return null;
 ```
 
@@ -562,7 +562,7 @@ Entregue na Fase 1, junto com o núcleo. O relay é assíncrono, distribuído en
 | `outbox_blocked_streams` | gauge | — | Fluxos inelegíveis por quarentena (§5.2) |
 | `outbox_dead_letter_count` | gauge | `destination` | Acompanhamento, não alerta |
 | `outbox_oldest_dead_letter_age_seconds` | gauge | — | Idade da quarentena mais antiga não resolvida. É o que distingue "duas quarentenas de ontem" de "duas quarentenas de março" (§6) |
-| `outbox_relay_claim_total` | counter | `outcome` (`acquired`, `contended`, `empty`) | Saúde do paralelismo. `contended` alto indica colisão de `hashtext` ou poucos fluxos quentes |
+| `outbox_relay_claim_total` | counter | `outcome` (`acquired`, `contended`, `all_contended`, `empty`) | Saúde do paralelismo. `contended` conta **candidatos** que perderam o lock; `acquired`, `all_contended` e `empty` contam **ciclos** (com fluxo, sem lock em nenhum candidato, sem candidato). `all_contended` alto indica colisão de `hashtext` ou poucos fluxos quentes; `empty` alto é só ociosidade |
 | `outbox_relay_batch_size` | summary | — | Mensagens publicadas por reivindicação |
 | `outbox_relay_cycle_duration` | timer | `outcome` (`acquired`, `empty`, `error`) | Duração da transação do relay. Vigia o risco de transação longa (§4.3). Alertar sobre `outcome="acquired"`: os ciclos vazios, a maioria no polling ocioso, diluem o percentil |
 | `outbox_published_total` | counter | `destination` | Throughput. Sem rótulo de broker: cada `destination` já mapeia para um único publisher, então o rótulo não separaria nada |
