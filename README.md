@@ -173,6 +173,14 @@ groups:
         annotations:
           summary: "Transação do relay se aproximando do timeout — risco de horizonte de vacuum (02 §4.3)."
 
+      # Contador POR INSTÂNCIA (cada coletor tem o seu): aqui sum/rate por instância, não a regra do max.
+      - alert: OutboxColetorDeMetricasFalhando
+        expr: sum by (instance) (increase(outbox_metrics_collector_failures_total[5m])) > 0
+        for: 10m
+        labels: { severity: media }
+        annotations:
+          summary: "Os gauges globais estão velhos; só a idade do backlog continua subindo sozinha."
+
       - alert: OutboxBacklogCrescendo
         expr: deriv(max(outbox_pending_count)[15m:]) > 0
         for: 15m

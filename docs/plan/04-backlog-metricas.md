@@ -35,7 +35,7 @@ nenhum rótulo; nunca `aggregate_id`, `message_id` ou `trace_id`) e entra na tab
   É o SLA real de propagação; hoje só existe a idade da mensagem mais antiga. O `created_at` já é
   lido pelo relay.
 
-- [ ] **N2. Saúde do próprio coletor**: `outbox_metrics_collector_failures_total` (counter) e
+- [x] **N2. Saúde do próprio coletor**: `outbox_metrics_collector_failures_total` (counter) e
   `outbox_metrics_collector_duration` (timer). Indicam que os gauges estão velhos e quando o
   `count(*)` começar a ficar caro. Onde: `MetricsCollector.collectQuietly`.
 

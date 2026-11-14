@@ -571,6 +571,8 @@ Entregue na Fase 1, junto com o núcleo. O relay é assíncrono, distribuído en
 | `outbox_publish_duration` | timer | `destination`, `outcome` | Latência do broker |
 | `outbox_retry_scheduled_total` | counter | `destination` | Volume de reprocessamento |
 | `outbox_purge_deleted_total` | counter | — | Eficácia da retenção (§6) |
+| `outbox_metrics_collector_failures_total` | counter | — | Falhas do coletor de gauges. **Por instância**, ao contrário dos gauges: cada coletor tem a sua. Enquanto sobe, os gauges globais estão velhos (a idade continua crescendo, o resto não) |
+| `outbox_metrics_collector_duration` | timer | — | Duração de cada rodada do coletor, com sucesso ou falha. Vigia o custo do `count(*)` conforme o backlog cresce |
 | `outbox_multi_pending_streams` | gauge | — | Fluxos com dois ou mais pendentes simultâneos. Existe para responder à questão em aberto 1 dos requisitos: se este número for consistentemente próximo de zero, toda a reivindicação por fluxo está sendo paga por um caso que quase não ocorre |
 
 **Cardinalidade.** Nenhum rótulo pode ser `aggregate_id`, `message_id` ou `trace_id`. São campos ilimitados e derrubam o backend de métricas. Investigação de um agregado específico é trabalho de log e de consulta à tabela, nunca de métrica.

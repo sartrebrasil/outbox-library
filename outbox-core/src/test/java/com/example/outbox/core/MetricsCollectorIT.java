@@ -85,6 +85,45 @@ class MetricsCollectorIT extends AbstractPostgresIT {
 		}
 	}
 
+	@Test
+	void coletorContaFalhasEMedeDuracao() throws Exception {
+		DataSource bancoFora = (DataSource) Proxy.newProxyInstance(getClass().getClassLoader(),
+				new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+					throw new SQLException("banco fora");
+				});
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		MetricsCollector collector = new MetricsCollector(bancoFora, registry, Duration.ofMillis(50), Instant::now);
+		try {
+			Instant deadline = Instant.now().plusSeconds(5);
+			while (Instant.now().isBefore(deadline)
+					&& registry.get("outbox_metrics_collector_failures_total").counter().count() < 2) {
+				Thread.sleep(30);
+			}
+		} finally {
+			collector.close();
+		}
+		// >= 2: prova que a falha não cancelou o agendamento
+		assertThat(registry.get("outbox_metrics_collector_failures_total").counter().count()).isGreaterThanOrEqualTo(2.0);
+		assertThat(registry.get("outbox_metrics_collector_duration").timer().count()).isGreaterThanOrEqualTo(2);
+	}
+
+	@Test
+	void coletorSaudavelNaoContaFalha() throws Exception {
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		MetricsCollector collector = new MetricsCollector(dataSource(), registry, Duration.ofMillis(50), Instant::now);
+		try {
+			Instant deadline = Instant.now().plusSeconds(5);
+			while (Instant.now().isBefore(deadline)
+					&& registry.get("outbox_metrics_collector_duration").timer().count() < 2) {
+				Thread.sleep(30);
+			}
+		} finally {
+			collector.close();
+		}
+		assertThat(registry.get("outbox_metrics_collector_duration").timer().count()).isGreaterThanOrEqualTo(2);
+		assertThat(registry.get("outbox_metrics_collector_failures_total").counter().count()).isZero();
+	}
+
 	private void awaitGauge(SimpleMeterRegistry registry, String destination, java.util.function.DoublePredicate condicao)
 			throws InterruptedException {
 		Instant deadline = Instant.now().plusSeconds(5);

@@ -1,8 +1,10 @@
 package com.example.outbox.core;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +48,8 @@ public final class MetricsCollector implements AutoCloseable {
 	private final AtomicLong blockedStreams = new AtomicLong();
 	private final AtomicLong oldestDeadLetterAgeSeconds = new AtomicLong();
 	private final AtomicLong multiPendingStreams = new AtomicLong();
+	private final Counter collectorFailures;
+	private final Timer collectorDuration;
 	private final Map<String, AtomicLong> deadLetterCountByDestination = new ConcurrentHashMap<>();
 
 	public MetricsCollector(DataSource dataSource, MeterRegistry registry, Duration interval,
@@ -53,6 +57,8 @@ public final class MetricsCollector implements AutoCloseable {
 		this.dataSource = dataSource;
 		this.registry = registry;
 		this.lastRelayCycleCompletedAt = lastRelayCycleCompletedAt;
+		this.collectorFailures = registry.counter("outbox_metrics_collector_failures_total");
+		this.collectorDuration = registry.timer("outbox_metrics_collector_duration");
 		registry.gauge("outbox_pending_count", pendingCount);
 		Gauge.builder("outbox_oldest_pending_age_seconds", this, MetricsCollector::oldestPendingAgeSeconds)
 				.strongReference(true)
@@ -80,10 +86,15 @@ public final class MetricsCollector implements AutoCloseable {
 	}
 
 	private void collectQuietly() {
+		Timer.Sample sample = Timer.start(registry);
 		try {
 			collect();
-		} catch (SQLException e) {
+		} catch (SQLException | RuntimeException e) {
+			// RuntimeException também: sem capturá-la o scheduleWithFixedDelay cancela as execuções seguintes em silêncio
+			collectorFailures.increment();
 			LOG.error("coletor de métricas falhou", e);
+		} finally {
+			sample.stop(collectorDuration);
 		}
 	}
 
