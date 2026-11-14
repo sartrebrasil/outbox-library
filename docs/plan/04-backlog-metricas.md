@@ -31,7 +31,7 @@ nenhum rótulo; nunca `aggregate_id`, `message_id` ou `trace_id`) e entra na tab
 
 ## Métricas novas (por valor)
 
-- [ ] **N1. `outbox_end_to_end_latency`**: timer `{destination}`, `published_at − created_at`.
+- [x] **N1. `outbox_end_to_end_latency`**: timer `{destination}`, `published_at − created_at`.
   É o SLA real de propagação; hoje só existe a idade da mensagem mais antiga. O `created_at` já é
   lido pelo relay.
 

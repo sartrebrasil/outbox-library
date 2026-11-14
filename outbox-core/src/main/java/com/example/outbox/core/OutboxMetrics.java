@@ -52,6 +52,11 @@ final class OutboxMetrics {
 		registry.counter("outbox_published_total", Tags.of("destination", destination)).increment();
 	}
 
+	/** Do {@code created_at} (relógio de quem fez o enqueue) até a publicação — inclui backoff e espera em fila. */
+	void endToEndLatency(String destination, Duration duration) {
+		registry.timer("outbox_end_to_end_latency", Tags.of("destination", destination)).record(duration);
+	}
+
 	void publishFailure(String destination, String classification) {
 		registry.counter("outbox_publish_failures_total",
 				Tags.of("destination", destination, "classification", classification)).increment();

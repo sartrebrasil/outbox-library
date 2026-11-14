@@ -182,6 +182,7 @@ public final class OutboxRelay implements AutoCloseable {
 				published++;
 				span.setAttribute("outbox.outcome", "success");
 				metrics.published(fluxo.destination());
+				metrics.endToEndLatency(fluxo.destination(), Duration.between(message.occurredAt(), Instant.now()));
 				metrics.publishDuration(fluxo.destination(), "success", Duration.between(start, Instant.now()));
 				logPublishSuccessOrRecovery(fluxo, message);
 			} catch (PermanentPublishException e) {

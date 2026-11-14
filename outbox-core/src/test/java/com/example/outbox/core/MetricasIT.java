@@ -38,6 +38,7 @@ class MetricasIT extends AbstractPostgresIT {
 		}
 
 		assertThat(registry.get("outbox_published_total").counter().count()).isEqualTo(1.0);
+		assertThat(registry.get("outbox_end_to_end_latency").tag("destination", "pedidos.fifo").timer().count()).isEqualTo(1);
 		assertThat(registry.get("outbox_relay_claim_total").tag("outcome", "acquired").counter().count()).isGreaterThanOrEqualTo(1.0);
 		assertThat(registry.get("outbox_relay_batch_size").summary().count()).isGreaterThanOrEqualTo(1);
 		assertThat(registry.get("outbox_relay_cycle_duration").tag("outcome", "acquired").timer().count())
