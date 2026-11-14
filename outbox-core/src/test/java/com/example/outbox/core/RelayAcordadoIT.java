@@ -66,7 +66,8 @@ class RelayAcordadoIT extends AbstractPostgresIT {
 			relay.close();
 		}
 		// 2 workers × (1 ciclo na partida + 1500 / 300) = 12; folga para o agendamento, nunca centenas
-		assertThat(registry.timer("outbox_relay_cycle_duration").count()).isBetween(4L, 16L);
+		long ciclos = registry.find("outbox_relay_cycle_duration").timers().stream().mapToLong(t -> t.count()).sum();
+		assertThat(ciclos).isBetween(4L, 16L);
 	}
 
 	@Test

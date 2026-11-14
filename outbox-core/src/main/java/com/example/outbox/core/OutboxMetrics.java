@@ -43,8 +43,9 @@ final class OutboxMetrics {
 		return Timer.start(registry);
 	}
 
-	void cycleCompleted(Timer.Sample sample) {
-		sample.stop(registry.timer("outbox_relay_cycle_duration"));
+	/** {@code outcome}: {@code acquired}, {@code empty} ou {@code error} — ciclos vazios não podem diluir o percentil. */
+	void cycleCompleted(Timer.Sample sample, String outcome) {
+		sample.stop(registry.timer("outbox_relay_cycle_duration", Tags.of("outcome", outcome)));
 	}
 
 	void published(String destination, String broker) {

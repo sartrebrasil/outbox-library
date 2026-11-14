@@ -564,7 +564,7 @@ Entregue na Fase 1, junto com o núcleo. O relay é assíncrono, distribuído en
 | `outbox_oldest_dead_letter_age_seconds` | gauge | — | Idade da quarentena mais antiga não resolvida. É o que distingue "duas quarentenas de ontem" de "duas quarentenas de março" (§6) |
 | `outbox_relay_claim_total` | counter | `outcome` (`acquired`, `contended`, `empty`) | Saúde do paralelismo. `contended` alto indica colisão de `hashtext` ou poucos fluxos quentes |
 | `outbox_relay_batch_size` | summary | — | Mensagens publicadas por reivindicação |
-| `outbox_relay_cycle_duration` | timer | — | Duração da transação do relay. Vigia o risco de transação longa (§4.3) |
+| `outbox_relay_cycle_duration` | timer | `outcome` (`acquired`, `empty`, `error`) | Duração da transação do relay. Vigia o risco de transação longa (§4.3). Alertar sobre `outcome="acquired"`: os ciclos vazios, a maioria no polling ocioso, diluem o percentil |
 | `outbox_published_total` | counter | `destination`, `broker` | Throughput |
 | `outbox_publish_failures_total` | counter | `destination`, `classification` (`permanent`, `transient`) | Distribuição de falhas |
 | `outbox_publish_duration` | timer | `destination`, `outcome` | Latência do broker |
@@ -608,7 +608,7 @@ Esses gauges são calculados por um coletor com **intervalo próprio** (`metrics
 | `outbox_oldest_pending_age_seconds` acima do SLA de propagação | alta | Broker fora, relay parado, fluxo em quarentena ou fluxo órfão (§5.3) — os quatro de uma vez |
 | `outbox_blocked_streams > 0` sustentado | média | Existe quarentena aguardando decisão humana (§5.3) |
 | `outbox_oldest_dead_letter_age_seconds` acima de alguns dias | média | Quarentena esquecida. Enquanto ela viver, todo evento novo daquele fluxo se acumula em `'infinity'` sem prazo (§6) |
-| `outbox_relay_cycle_duration` no percentil alto se aproximando do timeout | média | Transações longas segurando o horizonte de vacuum |
+| `outbox_relay_cycle_duration{outcome="acquired"}` no percentil alto se aproximando do timeout | média | Transações longas segurando o horizonte de vacuum |
 | `outbox_pending_count` com crescimento monotônico | média | Taxa de escrita acima da taxa de publicação |
 
 Alertar na idade, nunca na taxa de erro: taxa de erro sobe e desce sozinha e ensina o time a ignorá-la; a idade da mensagem mais antiga só sobe quando alguém precisa agir.

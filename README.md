@@ -168,7 +168,7 @@ groups:
           summary: "DEAD_LETTER vivo há dias — todo evento novo do fluxo se acumula em 'infinity' sem prazo."
 
       - alert: OutboxCicloDoRelayLento
-        expr: max(outbox_relay_cycle_duration_seconds{quantile="0.99"}) > 4   # aproxime do publish-timeout
+        expr: max(outbox_relay_cycle_duration_seconds{outcome="acquired",quantile="0.99"}) > 4   # aproxime do publish-timeout
         labels: { severity: media }
         annotations:
           summary: "Transação do relay se aproximando do timeout — risco de horizonte de vacuum (02 §4.3)."

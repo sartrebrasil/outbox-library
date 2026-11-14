@@ -138,6 +138,7 @@ public final class OutboxRelay implements AutoCloseable {
 
 	private boolean runOneCycle() throws SQLException {
 		Timer.Sample cycleSample = metrics.startCycle();
+		String outcome = "error";
 		try (Connection connection = dataSource.getConnection()) {
 			connection.setAutoCommit(false);
 			applyIdleTransactionTimeout(connection);
@@ -147,9 +148,10 @@ public final class OutboxRelay implements AutoCloseable {
 			}
 			connection.commit();
 			lastCycleCompletedAt.set(Instant.now());
+			outcome = claimed.isPresent() ? "acquired" : "empty";
 			return claimed.isPresent();
 		} finally {
-			metrics.cycleCompleted(cycleSample);
+			metrics.cycleCompleted(cycleSample, outcome);
 		}
 	}
 
