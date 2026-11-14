@@ -14,7 +14,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Cobre os três comportamentos de T1.1 que {@link EnqueueAtomicidadeIT} não cobre. */
 class JdbcOutboxWriterIT extends AbstractPostgresIT {
 
-	private final JdbcOutboxWriter writer = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry());
+	private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+	private final JdbcOutboxWriter writer = new JdbcOutboxWriter(OutboxConfig.defaults(), registry);
 
 	@Test
 	void enqueueGravaLinhaPendente() throws Exception {
@@ -52,6 +53,7 @@ class JdbcOutboxWriterIT extends AbstractPostgresIT {
 
 			assertThatThrownBy(() -> writer.enqueue(connection, message))
 					.isInstanceOf(IllegalStateException.class);
+			assertThat(registry.get("outbox_enqueue_total").tag("outcome", "error").counter().count()).isEqualTo(1.0);
 		}
 	}
 

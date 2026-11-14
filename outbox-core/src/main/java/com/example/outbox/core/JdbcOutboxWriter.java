@@ -71,6 +71,10 @@ public final class JdbcOutboxWriter implements OutboxWriter {
 		} catch (SQLException e) {
 			metrics.enqueue(message.aggregateType(), message.destination(), "error", Duration.between(start, Instant.now()));
 			throw new OutboxWriteException("falha ao gravar mensagem na outbox", e);
+		} catch (RuntimeException e) {
+			// ex.: IllegalStateException fora de transação — também é falha de escrita e não pode sumir da métrica
+			metrics.enqueue(message.aggregateType(), message.destination(), "error", Duration.between(start, Instant.now()));
+			throw e;
 		} finally {
 			span.end();
 		}
