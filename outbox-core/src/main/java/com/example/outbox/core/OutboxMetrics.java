@@ -90,6 +90,11 @@ final class OutboxMetrics {
 		registry.counter("outbox_quarantined_total", Tags.of("destination", destination)).increment();
 	}
 
+	/** Tentativas até o sucesso, contando a bem-sucedida: 1 = entregue de primeira. */
+	void publishAttempts(String destination, int attempts) {
+		registry.summary("outbox_publish_attempts", Tags.of("destination", destination)).record(attempts);
+	}
+
 	void purgeDeleted(long count) {
 		registry.counter("outbox_purge_deleted_total").increment(count);
 	}

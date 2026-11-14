@@ -29,7 +29,8 @@ class RetryQuarentenaIT extends AbstractPostgresIT {
 		OutboxConfig config = OutboxConfig.defaults()
 				.withPollingInterval(Duration.ofMillis(30))
 				.withBackoff(new OutboxConfig.Backoff(Duration.ofMillis(20), Duration.ofMillis(200), 1.0));
-		OutboxRelay relay = new OutboxRelay(dataSource(), config, new SimpleMeterRegistry(), Map.of("pedidos.fifo", publisher));
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		OutboxRelay relay = new OutboxRelay(dataSource(), config, registry, Map.of("pedidos.fifo", publisher));
 		try {
 			relay.start();
 			awaitStatus(message.messageId(), "PUBLISHED");
@@ -39,6 +40,10 @@ class RetryQuarentenaIT extends AbstractPostgresIT {
 
 		assertThat(publisher.published()).hasSize(1);
 		assertThat(attemptsOf(message.messageId())).isEqualTo(3);
+		// 3 falhas + a tentativa que sucedeu = 4; uma única entrega registrada
+		var attempts = registry.get("outbox_publish_attempts").tag("destination", "pedidos.fifo").summary();
+		assertThat(attempts.count()).isEqualTo(1);
+		assertThat(attempts.totalAmount()).isEqualTo(4.0);
 	}
 
 	@Test

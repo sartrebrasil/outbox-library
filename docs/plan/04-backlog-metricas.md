@@ -50,7 +50,7 @@ nenhum rótulo; nunca `aggregate_id`, `message_id` ou `trace_id`) e entra na tab
 - [x] **N5. `outbox_quarantined_total{destination}`**: counter da taxa de entrada em quarentena.
   O gauge `outbox_dead_letter_count` mostra o estoque, não o fluxo. Onde: `OutboxRelay.quarantine`.
 
-- [ ] **N6. `outbox_publish_attempts{destination}`**: summary do `attempts` no momento do
+- [x] **N6. `outbox_publish_attempts{destination}`**: summary do `attempts` no momento do
   sucesso. Mostra quantas tentativas custa cada entrega.
 
 - [ ] **N7. `outbox_enqueue_payload_bytes{destination}`**: summary. Mostra o quanto as mensagens
