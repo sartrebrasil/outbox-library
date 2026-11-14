@@ -68,6 +68,7 @@ nenhum rótulo; nunca `aggregate_id`, `message_id` ou `trace_id`) e entra na tab
 
 ## Pendências menores
 
-- [ ] **P1. Conferir se o README traz a regra de agregação `max`** junto dos exemplos de alerta, para
-  todos os gauges globais (§8.1, "Gauges globais com várias instâncias"). Essa conferência ainda não
-  foi feita.
+- [x] **P1. Conferir se o README traz a regra de agregação `max`** junto dos exemplos de alerta, para
+  todos os gauges globais (§8.1, "Gauges globais com várias instâncias"). Feita: o README já trazia a
+  regra, mas citava só 6 das 26 métricas. Ganhou a seção *Métricas* com as 26, cada uma com a coluna
+  *Entre instâncias* (`sum`, `max` ou por instância). Código, tabela do §8.1 e README conferem 26 a 26.

@@ -66,6 +66,9 @@ README raiz para a consulta de desbloqueio).
 
 ## Métricas globais (gauges com intervalo próprio)
 
+Referência completa de todas as métricas da lib, com rótulos e regra de agregação entre
+instâncias: README raiz, seção *Métricas*.
+
 ```java
 MetricsCollector coletor = new MetricsCollector(dataSource, meterRegistry,
         config.metricsInterval(), relay::lastCycleCompletedAt);

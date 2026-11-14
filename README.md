@@ -109,6 +109,84 @@ A versão é um timestamp (`V<yyyyMMddHHmm>`) para não colidir com as migraçõ
 nem de outras bibliotecas no mesmo histórico do Flyway. Use timestamp também nas suas
 migrações e ligue `out-of-order` (`spring.flyway.out-of-order=true`).
 
+## Métricas
+
+Todas via Micrometer, no `MeterRegistry` da aplicação (sem Actuator, a autoconfiguração cai num
+`SimpleMeterRegistry` e a lib continua funcionando, só que sem exportar nada). Detalhe de desenho
+e justificativa de cada uma em 02 §8.1.
+
+**Nomes no Prometheus.** Os nomes abaixo são os do Micrometer. Counters saem como `_total`, timers
+como `<nome>_seconds_count`, `_sum` e `_max`, e summaries como `<nome>_count`, `_sum` e `_max`.
+Timers **não publicam quantis por padrão**: para `{quantile="0.99"}` configure
+`management.metrics.distribution.percentiles.<nome>=0.99` (Spring Boot) ou o equivalente do seu registry.
+
+**Cardinalidade.** Nenhum rótulo é `aggregate_id`, `message_id` ou `trace_id` — são ilimitados e
+derrubam o backend de métricas. Investigar um agregado é trabalho de log e de consulta à tabela.
+
+**Agregação entre instâncias** (coluna *Entre instâncias*):
+
+- **`sum`**: counters, timers e summaries — cada instância conta o que fez; some as taxas.
+- **`max`**: gauges globais — descrevem o **banco**, não a instância. Com N relays todos reportam o
+  mesmo número; `sum` multiplica o backlog por N, justamente quando alguém escala o relay num incidente.
+- **por instância**: descrevem a instância. Não use `max` nem `sum` sobre o gauge.
+
+Séries com rótulo nascem no primeiro evento (não há `outbox_quarantined_total{destination="x"}` antes da
+primeira quarentena daquele destino), então `increase()` não enxerga o primeiro incremento. As séries de
+saúde da purga e do coletor, sem rótulo, nascem em zero.
+
+### Escrita — instâncias que chamam `enqueue`
+
+| Métrica | Tipo | Rótulos | O que mostra | Entre instâncias |
+|---|---|---|---|---|
+| `outbox_enqueue_total` | counter | `aggregate_type`, `destination`, `outcome` = `success` \| `rejected` (payload acima do limite) \| `error` (falha de banco ou chamada fora de transação) | Volume de escrita e quantas foram recusadas | `sum` |
+| `outbox_enqueue_duration` | timer | `aggregate_type`, `destination` | Latência do `enqueue` dentro da transação de negócio: separa degradação da outbox de degradação do domínio | `sum` das taxas |
+| `outbox_enqueue_payload_bytes` | summary | `destination` | Tamanho do payload em bytes, medido **antes** da validação: as rejeitadas também entram e mostram por quanto estouraram o limite | `sum` |
+
+### Relay — instâncias com `MessagePublisher`
+
+| Métrica | Tipo | Rótulos | O que mostra | Entre instâncias |
+|---|---|---|---|---|
+| `outbox_published_total` | counter | `destination` | Throughput de publicação | `sum` |
+| `outbox_end_to_end_latency` | timer | `destination` | Do `created_at` à publicação: o SLA de propagação como distribuição. Inclui backoff e espera em fila. Compara o relógio de quem fez o `enqueue` com o do relay: desvio entre hosts entra no valor | `sum` das taxas |
+| `outbox_publish_duration` | timer | `destination`, `outcome` = `success` \| `permanent_failure` \| `transient_failure` | Latência do broker | `sum` das taxas |
+| `outbox_publish_failures_total` | counter | `destination`, `classification` = `permanent` \| `transient` | Distribuição de falhas de publicação | `sum` |
+| `outbox_retry_scheduled_total` | counter | `destination` | Volume de reprocessamento (falhas transitórias que viraram backoff) | `sum` |
+| `outbox_publish_attempts` | summary | `destination` | Tentativas até o sucesso, **contando a bem-sucedida** (1 = de primeira). Não inclui o que ainda não saiu nem o que foi para quarentena | `sum` |
+| `outbox_quarantined_total` | counter | `destination` | Taxa de **entrada** em quarentena. O gauge `outbox_dead_letter_count` mostra o estoque; este mostra quando começou e a que ritmo | `sum` |
+| `outbox_relay_claim_total` | counter | `outcome` = `acquired` \| `contended` \| `all_contended` \| `empty` | Saúde do paralelismo. `contended` conta **candidatos** que perderam o lock; os outros contam **ciclos**. `all_contended` alto = colisão de `hashtext` ou poucos fluxos quentes; `empty` alto é só ociosidade | `sum` |
+| `outbox_relay_batch_size` | summary | — | Mensagens publicadas por reivindicação de fluxo (só registra quando publicou algo) | `sum` |
+| `outbox_relay_cycle_duration` | timer | `outcome` = `acquired` \| `empty` \| `error` | Duração da transação do relay. Alerte sobre `outcome="acquired"`: ciclos vazios, a maioria no polling ocioso, diluem o percentil. `outcome="error"` (em `_count`) é o registro de ciclos que falharam | `sum` das taxas |
+
+### Purga — toda instância com `PurgeJob`, inclusive só-escritora
+
+| Métrica | Tipo | Rótulos | O que mostra | Entre instâncias |
+|---|---|---|---|---|
+| `outbox_purge_deleted_total` | counter | — | Linhas `PUBLISHED` apagadas: eficácia da retenção | `sum` |
+| `outbox_purge_duration` | timer | — | Duração de cada ciclo de purga, com sucesso ou falha | `sum` das taxas |
+| `outbox_purge_failures_total` | counter | — | Ciclos de purga que falharam. Sem ele a tabela cresce sem aviso e o único rastro é um `ERROR` no log | por instância (`sum by (instance)`) |
+
+### Gauges globais — estado do banco, atualizados a cada `outbox.metrics-interval` (15s)
+
+Só existem em instâncias com relay (é o `MetricsCollector` que os alimenta, com uma consulta por rodada).
+
+| Métrica | Tipo | Rótulos | O que mostra | Entre instâncias |
+|---|---|---|---|---|
+| `outbox_pending_count` | gauge | — | Tamanho do backlog | **`max`** |
+| `outbox_oldest_pending_age_seconds` | gauge | — | **Alerta principal.** O maior de: idade da pendente mais antiga (sem filtro de disponibilidade) e tempo desde o último ciclo de relay. Continua subindo com relay morto **e** com o coletor falhando. É o que o health indicator lê | **`max`** |
+| `outbox_backoff_pending_count` | gauge | — | Pendentes adiadas por backoff (`available_at` no futuro, sem as represadas por quarentena). Conta a que falhou **e** as que esperam atrás dela no fluxo, porque o backoff adia o fluxo inteiro. Diferencia backlog saudável de backlog em retry | **`max`** |
+| `outbox_blocked_streams` | gauge | — | Fluxos `(aggregate_id, destination)` inelegíveis por quarentena | **`max`** |
+| `outbox_dead_letter_count` | gauge | `destination` | Quarentenas vivas por destino. Volta a 0 quando a última é resolvida. Acompanhamento, não alerta | **`max`** |
+| `outbox_oldest_dead_letter_age_seconds` | gauge | — | Idade da quarentena mais antiga não resolvida: distingue "duas de ontem" de "duas de março" | **`max`** |
+| `outbox_multi_pending_streams` | gauge | — | Fluxos com dois ou mais pendentes ao mesmo tempo. Se ficar perto de zero, a reivindicação por fluxo está sendo paga por um caso que quase não ocorre | **`max`** |
+
+### Saúde da própria instância
+
+| Métrica | Tipo | Rótulos | O que mostra | Entre instâncias |
+|---|---|---|---|---|
+| `outbox_relay_last_cycle_age_seconds` | gauge | — | Tempo desde o último ciclo de relay concluído **nesta instância**: separa "este relay morreu" de "há backlog". Só existe com relay | por instância (ou `min`, para saber se algum relay está vivo) |
+| `outbox_metrics_collector_failures_total` | counter | — | Rodadas do coletor que falharam. Enquanto sobe, os gauges globais estão velhos (só a idade do backlog continua subindo sozinha) | por instância (`sum by (instance)`) |
+| `outbox_metrics_collector_duration` | timer | — | Duração de cada rodada do coletor. Vigia o custo do `count(*)` conforme o backlog cresce | por instância |
+
 ## Operação
 
 ### Consulta de diagnóstico — fluxo órfão (02 §5.3)
@@ -141,8 +219,8 @@ WHERE aggregate_id = '...' AND destination = '...' AND status <> 'PUBLISHED';
 
 **Regra de agregação: `max`, nunca `sum`, entre instâncias.** Os gauges abaixo descrevem
 o estado do banco, não da instância que os publica — com N relays, todos reportam o mesmo
-número, e somar multiplica o backlog por N. A exceção é `outbox_relay_last_cycle_age_seconds`,
-que mede a instância, não o banco: leia-a por instância (ou com `min`, para saber se algum relay está vivo).
+número, e somar multiplica o backlog por N. As exceções (métricas por instância) estão marcadas
+na seção [Métricas](#métricas), coluna *Entre instâncias*.
 
 ```yaml
 groups:
@@ -168,6 +246,8 @@ groups:
         annotations:
           summary: "DEAD_LETTER vivo há dias — todo evento novo do fluxo se acumula em 'infinity' sem prazo."
 
+      # Exige quantis publicados: management.metrics.distribution.percentiles.outbox_relay_cycle_duration=0.99
+      # (timers não os publicam por padrão). Sem isso a série não existe e o alerta nunca dispara.
       - alert: OutboxCicloDoRelayLento
         expr: max(outbox_relay_cycle_duration_seconds{outcome="acquired",quantile="0.99"}) > 4   # aproxime do publish-timeout
         labels: { severity: media }
