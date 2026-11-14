@@ -39,9 +39,10 @@ nenhum rótulo; nunca `aggregate_id`, `message_id` ou `trace_id`) e entra na tab
   `outbox_metrics_collector_duration` (timer). Indicam que os gauges estão velhos e quando o
   `count(*)` começar a ficar caro. Onde: `MetricsCollector.collectQuietly`.
 
-- [ ] **N3. `outbox_relay_cycle_failures_total`**: counter. Hoje um erro de banco no claim só
-  aparece no log (`OutboxRelay.runOneCycleQuietly`). Se M1 entrar com `outcome="error"`,
-  avaliar se N3 ainda é necessária: `outbox_relay_cycle_duration_count{outcome="error"}` já cobre.
+- [x] **N3. ~~`outbox_relay_cycle_failures_total`~~ — dispensada.** Coberta por
+  `outbox_relay_cycle_duration_count{outcome="error"}` (M1); o teste
+  `MetricasIT.cicloQueFalhaContaOutcomeError` prova a cobertura. Sem alerta de taxa de erro, por
+  §8.2 ("alertar na idade"): a falha prolongada já sobe `outbox_oldest_pending_age_seconds`.
 
 - [ ] **N4. Purga observável**: `outbox_purge_duration` (timer) e `outbox_purge_failures_total`
   (counter). A duração já é calculada para o log em `PurgeJob.runOneCycle`.

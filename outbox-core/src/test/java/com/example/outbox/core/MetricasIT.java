@@ -3,7 +3,10 @@ package com.example.outbox.core;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
+import javax.sql.DataSource;
+import java.lang.reflect.Proxy;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -43,6 +46,31 @@ class MetricasIT extends AbstractPostgresIT {
 		assertThat(registry.get("outbox_relay_batch_size").summary().count()).isGreaterThanOrEqualTo(1);
 		assertThat(registry.get("outbox_relay_cycle_duration").tag("outcome", "acquired").timer().count())
 				.isGreaterThanOrEqualTo(1);
+	}
+
+	/** N3: falha de ciclo (aqui, sem conexão) já aparece em outbox_relay_cycle_duration{outcome="error"} — sem counter à parte. */
+	@Test
+	void cicloQueFalhaContaOutcomeError() throws Exception {
+		DataSource bancoFora = (DataSource) Proxy.newProxyInstance(getClass().getClassLoader(),
+				new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+					throw new SQLException("banco fora");
+				});
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		OutboxConfig config = OutboxConfig.defaults().withPollingInterval(Duration.ofMillis(30));
+		OutboxRelay relay = new OutboxRelay(bancoFora, config, registry, Map.of());
+		try {
+			relay.start();
+			Instant deadline = Instant.now().plusSeconds(5);
+			while (Instant.now().isBefore(deadline)
+					&& (registry.find("outbox_relay_cycle_duration").tag("outcome", "error").timer() == null)) {
+				Thread.sleep(30);
+			}
+		} finally {
+			relay.close();
+		}
+		assertThat(registry.get("outbox_relay_cycle_duration").tag("outcome", "error").timer().count())
+				.isGreaterThanOrEqualTo(1);
+		assertThat(registry.find("outbox_relay_cycle_duration").tag("outcome", "acquired").timer()).isNull();
 	}
 
 	private void awaitPublished(InMemoryMessagePublisher publisher) throws InterruptedException {
