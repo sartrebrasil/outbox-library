@@ -3,7 +3,10 @@ package com.example.outbox.core;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
+import javax.sql.DataSource;
+import java.lang.reflect.Proxy;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -44,6 +47,55 @@ class MetricsCollectorIT extends AbstractPostgresIT {
 		} finally {
 			collector.close();
 		}
+	}
+
+	@Test
+	void deadLetterCountVoltaAZeroQuandoQuarentenaEResolvida() throws Exception {
+		insertRow("DEAD_LETTER", "resolvido.fifo");
+
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		MetricsCollector collector = new MetricsCollector(dataSource(), registry, Duration.ofMillis(50), Instant::now);
+		try {
+			awaitGauge(registry, "resolvido.fifo", v -> v == 1.0);
+			try (Connection connection = newConnection();
+					var delete = connection.prepareStatement("DELETE FROM outbox_message WHERE destination = 'resolvido.fifo'")) {
+				delete.executeUpdate();
+				connection.commit();
+			}
+			awaitGauge(registry, "resolvido.fifo", v -> v == 0.0);
+		} finally {
+			collector.close();
+		}
+	}
+
+	@Test
+	void oldestPendingAgeNaoCongelaComColetorFalhando() throws Exception {
+		DataSource bancoFora = (DataSource) Proxy.newProxyInstance(getClass().getClassLoader(),
+				new Class<?>[] {DataSource.class}, (proxy, method, args) -> {
+					throw new SQLException("banco fora");
+				});
+		Instant relayMortoDesde = Instant.now().minusSeconds(120);
+
+		SimpleMeterRegistry registry = new SimpleMeterRegistry();
+		MetricsCollector collector = new MetricsCollector(bancoFora, registry, Duration.ofMillis(50), () -> relayMortoDesde);
+		try {
+			awaitGaugeAtLeast(registry, "outbox_oldest_pending_age_seconds", 100.0);
+		} finally {
+			collector.close();
+		}
+	}
+
+	private void awaitGauge(SimpleMeterRegistry registry, String destination, java.util.function.DoublePredicate condicao)
+			throws InterruptedException {
+		Instant deadline = Instant.now().plusSeconds(5);
+		while (Instant.now().isBefore(deadline)) {
+			var meter = registry.find("outbox_dead_letter_count").tag("destination", destination).gauge();
+			if (meter != null && condicao.test(meter.value())) {
+				return;
+			}
+			Thread.sleep(30);
+		}
+		throw new AssertionError("outbox_dead_letter_count{destination=" + destination + "} não atingiu a condição");
 	}
 
 	private void awaitGaugeAtLeast(SimpleMeterRegistry registry, String name, double minimo) throws InterruptedException {

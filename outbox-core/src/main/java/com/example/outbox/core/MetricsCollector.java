@@ -1,5 +1,6 @@
 package com.example.outbox.core;
 
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import org.slf4j.Logger;
@@ -12,6 +13,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -24,9 +26,10 @@ import java.util.function.Supplier;
  * Coletor dos gauges globais de 02 §8.1, com intervalo próprio (metrics.interval),
  * desacoplado do polling do relay: uma consulta única alimenta cada gauge.
  *
- * <p>{@code outbox_oldest_pending_age_seconds} soma dois termos deliberadamente (§8.1):
- * o backlog real de pendentes, sem filtro de disponibilidade, e o tempo desde o último
- * ciclo de relay concluído — para que a métrica continue subindo mesmo com o relay morto.
+ * <p>{@code outbox_oldest_pending_age_seconds} é o maior de dois termos (§8.1): a idade
+ * da pendente mais antiga, sem filtro de disponibilidade, e o tempo desde o último ciclo
+ * de relay concluído. Ambos são calculados no scrape, a partir da última leitura, para que
+ * a métrica continue subindo com o relay morto — e também com o coletor falhando.
  */
 public final class MetricsCollector implements AutoCloseable {
 
@@ -38,7 +41,8 @@ public final class MetricsCollector implements AutoCloseable {
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
 	private final AtomicLong pendingCount = new AtomicLong();
-	private final AtomicLong oldestPendingAgeSeconds = new AtomicLong();
+	private volatile long oldestPendingAgeSecondsAtCollect;
+	private volatile Instant lastCollectedAt = Instant.now();
 	private final AtomicLong blockedStreams = new AtomicLong();
 	private final AtomicLong oldestDeadLetterAgeSeconds = new AtomicLong();
 	private final AtomicLong multiPendingStreams = new AtomicLong();
@@ -50,7 +54,9 @@ public final class MetricsCollector implements AutoCloseable {
 		this.registry = registry;
 		this.lastRelayCycleCompletedAt = lastRelayCycleCompletedAt;
 		registry.gauge("outbox_pending_count", pendingCount);
-		registry.gauge("outbox_oldest_pending_age_seconds", oldestPendingAgeSeconds);
+		Gauge.builder("outbox_oldest_pending_age_seconds", this, MetricsCollector::oldestPendingAgeSeconds)
+				.strongReference(true)
+				.register(registry);
 		registry.gauge("outbox_blocked_streams", blockedStreams);
 		registry.gauge("outbox_oldest_dead_letter_age_seconds", oldestDeadLetterAgeSeconds);
 		registry.gauge("outbox_multi_pending_streams", multiPendingStreams);
@@ -60,6 +66,17 @@ public final class MetricsCollector implements AutoCloseable {
 	@Override
 	public void close() {
 		executor.shutdownNow();
+	}
+
+	/** Extrapola a partir da última leitura: se o coletor parar de ler, o valor não congela. */
+	private double oldestPendingAgeSeconds() {
+		Instant now = Instant.now();
+		long fromTable = oldestPendingAgeSecondsAtCollect;
+		if (fromTable > 0) {
+			fromTable += Duration.between(lastCollectedAt, now).getSeconds();
+		}
+		long sinceLastRelayCycle = Duration.between(lastRelayCycleCompletedAt.get(), now).getSeconds();
+		return Math.max(fromTable, sinceLastRelayCycle);
 	}
 
 	private void collectQuietly() {
@@ -74,12 +91,11 @@ public final class MetricsCollector implements AutoCloseable {
 		try (Connection connection = dataSource.getConnection()) {
 			pendingCount.set(scalarLong(connection, "SELECT count(*) FROM outbox_message WHERE status = 'PENDING'"));
 
-			long oldestPendingSecondsFromTable = scalarLong(connection, """
+			oldestPendingAgeSecondsAtCollect = scalarLong(connection, """
 					SELECT COALESCE(EXTRACT(EPOCH FROM now() - min(created_at)), 0)
 					FROM outbox_message WHERE status = 'PENDING'
 					""");
-			long secondsSinceLastRelayCycle = Duration.between(lastRelayCycleCompletedAt.get(), Instant.now()).getSeconds();
-			oldestPendingAgeSeconds.set(Math.max(oldestPendingSecondsFromTable, secondsSinceLastRelayCycle));
+			lastCollectedAt = Instant.now();
 
 			blockedStreams.set(scalarLong(connection, """
 					SELECT count(DISTINCT (aggregate_id, destination)) FROM outbox_message WHERE status = 'DEAD_LETTER'
@@ -102,15 +118,17 @@ public final class MetricsCollector implements AutoCloseable {
 	}
 
 	private void collectDeadLetterByDestination(Connection connection) throws SQLException {
+		Map<String, Long> current = new HashMap<>();
 		try (PreparedStatement select = connection.prepareStatement(
 				"SELECT destination, count(*) AS total FROM outbox_message WHERE status = 'DEAD_LETTER' GROUP BY destination");
 				ResultSet resultSet = select.executeQuery()) {
 			while (resultSet.next()) {
-				String destination = resultSet.getString("destination");
-				long total = resultSet.getLong("total");
-				deadLetterCountByDestination.computeIfAbsent(destination, this::registerDeadLetterGauge).set(total);
+				current.put(resultSet.getString("destination"), resultSet.getLong("total"));
 			}
 		}
+		current.keySet().forEach(destination -> deadLetterCountByDestination.computeIfAbsent(destination, this::registerDeadLetterGauge));
+		// destino que saiu do GROUP BY teve a quarentena resolvida: zera em vez de manter o último valor
+		deadLetterCountByDestination.forEach((destination, value) -> value.set(current.getOrDefault(destination, 0L)));
 	}
 
 	private AtomicLong registerDeadLetterGauge(String destination) {
