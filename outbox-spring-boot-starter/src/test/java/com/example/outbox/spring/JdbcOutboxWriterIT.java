@@ -2,7 +2,10 @@ package com.example.outbox.spring;
 
 import com.example.outbox.core.OutboxConfig;
 import com.example.outbox.core.OutboxMessage;
+import com.example.outbox.core.OutboxSerializationException;
+import com.example.outbox.core.PayloadSerializer;
 import com.example.outbox.core.PayloadTooLargeException;
+import tools.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
@@ -31,6 +34,8 @@ class JdbcOutboxWriterIT {
 	private static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:14")
 			.withDatabaseName("outbox").withUsername("outbox").withPassword("outbox");
 
+	private static final PayloadSerializer SERIALIZER = new JacksonPayloadSerializer(new ObjectMapper());
+
 	private static JdbcClient jdbc;
 	private static TransactionTemplate tx;
 
@@ -54,7 +59,7 @@ class JdbcOutboxWriterIT {
 	@BeforeEach
 	void truncate() {
 		jdbc.sql("TRUNCATE TABLE outbox_message").update();
-		writer = new JdbcOutboxWriter(OutboxConfig.defaults(), registry, jdbc);
+		writer = new JdbcOutboxWriter(OutboxConfig.defaults(), registry, jdbc, SERIALIZER);
 	}
 
 	@Test
@@ -110,7 +115,7 @@ class JdbcOutboxWriterIT {
 	void enqueueRejeitaPayloadMaiorQueOLimiteDoDestino() {
 		OutboxConfig config = OutboxConfig.defaults().withPayloadLimits(new OutboxConfig.PayloadLimits(10L, Map.of()));
 		SimpleMeterRegistry smallRegistry = new SimpleMeterRegistry();
-		JdbcOutboxWriter smallLimitWriter = new JdbcOutboxWriter(config, smallRegistry, jdbc);
+		JdbcOutboxWriter smallLimitWriter = new JdbcOutboxWriter(config, smallRegistry, jdbc, SERIALIZER);
 		OutboxMessage message = OutboxMessage.of(
 				"Pedido", "pedido-1", null, "PedidoCriado", "{\"total\":\"muito grande pro limite\"}", "pedidos.fifo");
 
@@ -118,5 +123,32 @@ class JdbcOutboxWriterIT {
 				.isInstanceOf(PayloadTooLargeException.class);
 		// a rejeitada também é medida: mostra por quanto estourou o limite de 10 bytes
 		assertThat(smallRegistry.get("outbox_enqueue_payload_bytes").summary().totalAmount()).isGreaterThan(10.0);
+	}
+
+	@Test
+	void sobrecargaComObjetoSerializaEGrava() {
+		record Pedido(String id, int total) {
+		}
+
+		tx.executeWithoutResult(status ->
+				writer.enqueue("Pedido", "pedido-1", 1L, "PedidoCriado", new Pedido("pedido-1", 42), "pedidos.fifo"));
+
+		assertThat(jdbc.sql("SELECT payload FROM outbox_message").query(String.class).single())
+				.isEqualTo("{\"id\":\"pedido-1\",\"total\":42}");
+	}
+
+	@Test
+	void payloadQueNaoSerializaContaErroENaoGrava() {
+		PayloadSerializer quebrado = payload -> {
+			throw new OutboxSerializationException("não serializou", null);
+		};
+		JdbcOutboxWriter quebradoWriter = new JdbcOutboxWriter(OutboxConfig.defaults(), registry, jdbc, quebrado);
+
+		assertThatThrownBy(() -> tx.executeWithoutResult(status ->
+				quebradoWriter.enqueue("Pedido", "pedido-1", null, "PedidoCriado", new Object(), "pedidos.fifo")))
+				.isInstanceOf(OutboxSerializationException.class);
+
+		assertThat(registry.get("outbox_enqueue_total").tag("outcome", "error").counter().count()).isEqualTo(1.0);
+		assertThat(jdbc.sql("SELECT count(*) FROM outbox_message").query(Long.class).single()).isZero();
 	}
 }

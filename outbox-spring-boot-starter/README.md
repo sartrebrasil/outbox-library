@@ -9,6 +9,7 @@
 |---|---|---|
 | `OutboxConfig` | Sim | — |
 | `MeterRegistry` | Só se a aplicação/Actuator não já tiver um | Fallback `SimpleMeterRegistry`, no-op se ninguém ler |
+| `PayloadSerializer` | Sim | `JacksonPayloadSerializer` sobre o `ObjectMapper` do contexto; defina o seu para trocar |
 | `JdbcOutboxWriter` | Sim | Usa o bean `JdbcClient` se existir; senão cria um sobre o `DataSource` |
 | `SpringOutboxWriter` | Sim | — |
 | `OutboxRelay` | Não | Só se houver pelo menos um bean `MessagePublisher` |
@@ -63,7 +64,7 @@ outbox.destinations[pedidos.fifo].max-payload-bytes=256KB
 public void criarPedido(Pedido pedido) {
     jdbcTemplate.update(...); // grava o pedido na mesma transação
     writer.enqueue("Pedido", pedido.getId(), pedido.getVersao(), "PedidoCriado",
-            pedido, "pedidos.fifo"); // serializa com o ObjectMapper do contexto
+            pedido, "pedidos.fifo"); // serializa com o PayloadSerializer (ObjectMapper do contexto); String já em JSON seria codificada de novo, use OutboxMessage.of
 }
 ```
 

@@ -55,8 +55,9 @@ class SpringOutboxWriterIT {
 				(java.sql.Driver) Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance(),
 				POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
 		transactionTemplate = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
-		JdbcOutboxWriter delegate = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry(), JdbcClient.create(dataSource));
-		writer = new SpringOutboxWriter(delegate, new ObjectMapper());
+		JdbcOutboxWriter delegate = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry(), JdbcClient.create(dataSource),
+				new JacksonPayloadSerializer(new ObjectMapper()));
+		writer = new SpringOutboxWriter(delegate);
 	}
 
 	@AfterAll
@@ -74,8 +75,9 @@ class SpringOutboxWriterIT {
 	@Test
 	void avisaORelayUmaVezPorTransacaoDepoisDoCommitENuncaNoRollback() {
 		java.util.concurrent.atomic.AtomicInteger wakes = new java.util.concurrent.atomic.AtomicInteger();
-		JdbcOutboxWriter delegate = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry(), JdbcClient.create(dataSource));
-		SpringOutboxWriter waking = new SpringOutboxWriter(delegate, new ObjectMapper(), wakes::incrementAndGet);
+		JdbcOutboxWriter delegate = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry(), JdbcClient.create(dataSource),
+				new JacksonPayloadSerializer(new ObjectMapper()));
+		SpringOutboxWriter waking = new SpringOutboxWriter(delegate, wakes::incrementAndGet);
 
 		transactionTemplate.executeWithoutResult(status -> {
 			waking.enqueue(OutboxMessage.of("Pedido", "pedido-1", null, "PedidoCriado", "{}", "pedidos.fifo"));
