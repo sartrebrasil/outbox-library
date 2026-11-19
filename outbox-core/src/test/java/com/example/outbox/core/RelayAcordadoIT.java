@@ -88,7 +88,7 @@ class RelayAcordadoIT extends AbstractPostgresIT {
 	private UUID enqueue(String aggregateId) throws Exception {
 		OutboxMessage message = OutboxMessage.of("Pedido", aggregateId, 1L, "PedidoCriado", "{}", "pedidos.fifo");
 		try (Connection connection = newConnection()) {
-			new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry()).enqueue(connection, message);
+			new OutboxSeeder().enqueue(connection, message);
 			connection.commit();
 		}
 		return message.messageId();

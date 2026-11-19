@@ -10,7 +10,7 @@ import java.util.Map;
  * válido. O escape de string segue RFC 8259 e cobre aspas, barra invertida, quebra de
  * linha e caracteres de controle.
  */
-final class EnvelopeJsonWriter {
+public final class EnvelopeJsonWriter {
 
 	static String writeBody(OutboxEnvelope envelope) {
 		StringBuilder json = new StringBuilder(256);
@@ -30,7 +30,7 @@ final class EnvelopeJsonWriter {
 	}
 
 	/** JSON do objeto de headers, ou {@code "{}"} quando vazio ou nulo. */
-	static String headersToJson(Map<String, String> headers) {
+	public static String headersToJson(Map<String, String> headers) {
 		if (headers == null || headers.isEmpty()) {
 			return "{}";
 		}

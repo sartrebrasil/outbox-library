@@ -81,7 +81,7 @@ class GateG2CargaIT extends AbstractPostgresIT {
 	}
 
 	private int gerarCargaComRajadas() throws Exception {
-		OutboxWriter writer = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry());
+		OutboxSeeder writer = new OutboxSeeder();
 		ExecutorService writers = Executors.newFixedThreadPool(WRITER_THREADS);
 		CountDownLatch done = new CountDownLatch(AGREGADOS);
 		java.util.concurrent.atomic.AtomicInteger totalMensagens = new java.util.concurrent.atomic.AtomicInteger();

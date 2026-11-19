@@ -1,5 +1,12 @@
-package com.example.outbox.core;
+package com.example.outbox.spring;
 
+import com.example.outbox.core.EnvelopeJsonWriter;
+import com.example.outbox.core.OutboxConfig;
+import com.example.outbox.core.OutboxMessage;
+import com.example.outbox.core.OutboxMetrics;
+import com.example.outbox.core.OutboxWriteException;
+import com.example.outbox.core.OutboxWriter;
+import com.example.outbox.core.PayloadTooLargeException;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
@@ -8,11 +15,12 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Scope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
+import org.springframework.jdbc.core.SqlParameterValue;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Duration;
 import java.time.Instant;
@@ -21,8 +29,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Escritor JDBC do core (02 §3): INSERT dentro da transação do chamador, fail-fast de
- * auto-commit (§3.4) e validação de tamanho de payload por destino (§3.5).
+ * Escritor JDBC (02 §3): INSERT via {@link JdbcClient}, que participa da transação Spring do chamador, fail-fast
+ * fora de transação (§3.4) e validação de tamanho de payload por destino (§3.5).
  */
 public final class JdbcOutboxWriter implements OutboxWriter {
 
@@ -38,14 +46,16 @@ public final class JdbcOutboxWriter implements OutboxWriter {
 
 	private final OutboxConfig.PayloadLimits payloadLimits;
 	private final OutboxMetrics metrics;
+	private final JdbcClient jdbcClient;
 
-	public JdbcOutboxWriter(OutboxConfig config, MeterRegistry registry) {
+	public JdbcOutboxWriter(OutboxConfig config, MeterRegistry registry, JdbcClient jdbcClient) {
 		this.payloadLimits = config.payloadLimits();
 		this.metrics = new OutboxMetrics(registry);
+		this.jdbcClient = jdbcClient;
 	}
 
 	@Override
-	public void enqueue(Connection connection, OutboxMessage message) {
+	public void enqueue(OutboxMessage message) {
 		Instant start = Instant.now();
 		Span span = TRACER.spanBuilder("outbox.enqueue")
 				.setSpanKind(SpanKind.INTERNAL)
@@ -54,11 +64,11 @@ public final class JdbcOutboxWriter implements OutboxWriter {
 				.setAttribute("outbox.aggregate_type", message.aggregateType())
 				.startSpan();
 		try (Scope scope = span.makeCurrent()) {
-			if (connection.getAutoCommit()) {
-				throw new IllegalStateException("enqueue() chamado fora de uma transação ativa");
+			if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+				throw new IllegalStateException("enqueue() chamado fora de uma transação Spring ativa");
 			}
 			validateSize(message);
-			insert(connection, message, span);
+			insert(message, span);
 			metrics.enqueue(message.aggregateType(), message.destination(), "success", Duration.between(start, Instant.now()));
 			LOG.atDebug()
 					.setMessage("enqueue realizado")
@@ -68,7 +78,7 @@ public final class JdbcOutboxWriter implements OutboxWriter {
 		} catch (PayloadTooLargeException e) {
 			metrics.enqueue(message.aggregateType(), message.destination(), "rejected", Duration.between(start, Instant.now()));
 			throw e;
-		} catch (SQLException e) {
+		} catch (DataAccessException e) {
 			metrics.enqueue(message.aggregateType(), message.destination(), "error", Duration.between(start, Instant.now()));
 			throw new OutboxWriteException("falha ao gravar mensagem na outbox", e);
 		} catch (RuntimeException e) {
@@ -89,29 +99,24 @@ public final class JdbcOutboxWriter implements OutboxWriter {
 		}
 	}
 
-	private void insert(Connection connection, OutboxMessage message, Span span) throws SQLException {
+	private void insert(OutboxMessage message, Span span) {
 		String traceId = span.getSpanContext().getTraceId();
 		String traceparent = formatTraceparent(span);
 		Map<String, String> headersWithTraceparent = mergeTraceparent(message.headers(), traceparent);
 
-		try (PreparedStatement statement = connection.prepareStatement(INSERT_SQL)) {
-			statement.setObject(1, message.messageId());
-			statement.setString(2, message.aggregateType());
-			statement.setString(3, message.aggregateId());
-			if (message.aggregateVersion() != null) {
-				statement.setLong(4, message.aggregateVersion());
-			} else {
-				statement.setNull(4, Types.BIGINT);
-			}
-			statement.setString(5, message.eventType());
-			statement.setString(6, message.payload());
-			statement.setString(7, EnvelopeJsonWriter.headersToJson(headersWithTraceparent));
-			statement.setString(8, traceId);
-			statement.setString(9, message.destination());
-			statement.setObject(10, message.occurredAt().atOffset(ZoneOffset.UTC));
-			statement.setObject(11, message.occurredAt().atOffset(ZoneOffset.UTC));
-			statement.executeUpdate();
-		}
+		jdbcClient.sql(INSERT_SQL)
+				.param(message.messageId())
+				.param(message.aggregateType())
+				.param(message.aggregateId())
+				.param(new SqlParameterValue(Types.BIGINT, message.aggregateVersion()))
+				.param(message.eventType())
+				.param(message.payload())
+				.param(EnvelopeJsonWriter.headersToJson(headersWithTraceparent))
+				.param(traceId)
+				.param(message.destination())
+				.param(message.occurredAt().atOffset(ZoneOffset.UTC))
+				.param(message.occurredAt().atOffset(ZoneOffset.UTC))
+				.update();
 	}
 
 	private static Map<String, String> mergeTraceparent(Map<String, String> headers, String traceparent) {

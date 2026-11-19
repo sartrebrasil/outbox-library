@@ -11,11 +11,11 @@ import java.time.Duration;
  * contrato: nenhum rótulo pode ser {@code aggregate_id}, {@code message_id} ou
  * {@code trace_id} — são campos ilimitados e derrubam o backend de métricas.
  */
-final class OutboxMetrics {
+public final class OutboxMetrics {
 
 	private final MeterRegistry registry;
 
-	OutboxMetrics(MeterRegistry registry) {
+	public OutboxMetrics(MeterRegistry registry) {
 		this.registry = registry;
 	}
 
@@ -23,7 +23,7 @@ final class OutboxMetrics {
 		return registry;
 	}
 
-	void enqueue(String aggregateType, String destination, String outcome, Duration duration) {
+	public void enqueue(String aggregateType, String destination, String outcome, Duration duration) {
 		registry.timer("outbox_enqueue_duration", Tags.of("aggregate_type", aggregateType, "destination", destination))
 				.record(duration);
 		registry.counter("outbox_enqueue_total",
@@ -32,7 +32,7 @@ final class OutboxMetrics {
 	}
 
 	/** Tamanho do payload em bytes, medido antes da validação: as rejeitadas também entram, e mostram por quanto estouraram. */
-	void enqueuePayloadBytes(String destination, int bytes) {
+	public void enqueuePayloadBytes(String destination, int bytes) {
 		registry.summary("outbox_enqueue_payload_bytes", Tags.of("destination", destination)).record(bytes);
 	}
 

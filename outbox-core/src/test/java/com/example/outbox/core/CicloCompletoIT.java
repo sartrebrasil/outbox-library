@@ -19,7 +19,7 @@ class CicloCompletoIT extends AbstractPostgresIT {
 
 	@Test
 	void mensagemEnfileiradaChegaAoPublisherEFicaPublicada() throws Exception {
-		OutboxWriter writer = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry());
+		OutboxSeeder writer = new OutboxSeeder();
 		OutboxMessage message = OutboxMessage.of(
 				"Pedido", "pedido-1", 1L, "PedidoCriado", "{\"total\":10}", "pedidos.fifo");
 		try (Connection connection = newConnection()) {

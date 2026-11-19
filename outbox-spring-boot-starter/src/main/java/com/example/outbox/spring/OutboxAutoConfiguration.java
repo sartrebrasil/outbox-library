@@ -1,6 +1,5 @@
 package com.example.outbox.spring;
 
-import com.example.outbox.core.JdbcOutboxWriter;
 import com.example.outbox.core.MessagePublisher;
 import com.example.outbox.core.MetricsCollector;
 import com.example.outbox.core.OutboxConfig;
@@ -18,6 +17,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.jdbc.core.simple.JdbcClient;
 
 import javax.sql.DataSource;
 import java.util.Map;
@@ -48,16 +49,19 @@ public class OutboxAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
-	public JdbcOutboxWriter jdbcOutboxWriter(OutboxConfig config, MeterRegistry registry) {
-		return new JdbcOutboxWriter(config, registry);
+	public JdbcOutboxWriter jdbcOutboxWriter(OutboxConfig config, MeterRegistry registry, DataSource dataSource,
+			ObjectProvider<JdbcClient> jdbcClient) {
+		return new JdbcOutboxWriter(config, registry, jdbcClient.getIfAvailable(() -> JdbcClient.create(dataSource)));
 	}
 
+	/** {@code @Primary}: quem injeta {@code OutboxWriter} recebe este (com aviso ao relay), não o {@link JdbcOutboxWriter} cru. */
 	@Bean
+	@Primary
 	@ConditionalOnMissingBean
-	public SpringOutboxWriter springOutboxWriter(JdbcOutboxWriter delegate, DataSource dataSource, ObjectMapper objectMapper,
+	public SpringOutboxWriter springOutboxWriter(JdbcOutboxWriter delegate, ObjectMapper objectMapper,
 			ObjectProvider<OutboxRelay> relay) {
 		// sem relay neste contexto (sem MessagePublisher) o aviso não faz nada; o provider evita a dependência circular
-		return new SpringOutboxWriter(delegate, dataSource, objectMapper, () -> relay.ifAvailable(OutboxRelay::wake));
+		return new SpringOutboxWriter(delegate, objectMapper, () -> relay.ifAvailable(OutboxRelay::wake));
 	}
 
 	/** Só existe se a aplicação registrou pelo menos um {@link MessagePublisher} (02 §4.2.3). */

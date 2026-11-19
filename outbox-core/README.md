@@ -16,22 +16,10 @@ timestamp: use o mesmo padrão nas migrações da aplicação (detalhes no READM
 
 ## Escrever (dentro da transação de negócio)
 
-```java
-OutboxConfig config = OutboxConfig.defaults();
-JdbcOutboxWriter writer = new JdbcOutboxWriter(config, meterRegistry);
-
-try (Connection connection = dataSource.getConnection()) {
-    connection.setAutoCommit(false);
-    // ... INSERT/UPDATE da entidade de negócio na mesma connection ...
-    writer.enqueue(connection, OutboxMessage.of(
-            "Pedido", pedido.getId(), pedido.getVersao(), "PedidoCriado", payloadJson, "pedidos.fifo"));
-    connection.commit();
-}
-```
-
-`enqueue()` lança `IllegalStateException` se a conexão estiver em auto-commit (falha
-rápida, não prova de atomicidade — a prova real são os testes de integração) e
-`PayloadTooLargeException` se o payload exceder `outbox.max-payload-bytes` do destino.
+O core só define a interface `OutboxWriter` (`enqueue(OutboxMessage)`). A implementação JDBC,
+`JdbcOutboxWriter`, usa `JdbcClient` e vive no `outbox-spring-boot-starter`. Sem Spring, faça o
+`INSERT` em `outbox_message` (schema acima) na mesma transação da escrita de negócio; o relay
+publica a partir daí.
 
 ## Publicar
 

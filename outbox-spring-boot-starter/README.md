@@ -9,7 +9,7 @@
 |---|---|---|
 | `OutboxConfig` | Sim | — |
 | `MeterRegistry` | Só se a aplicação/Actuator não já tiver um | Fallback `SimpleMeterRegistry`, no-op se ninguém ler |
-| `JdbcOutboxWriter` | Sim | — |
+| `JdbcOutboxWriter` | Sim | Usa o bean `JdbcClient` se existir; senão cria um sobre o `DataSource` |
 | `SpringOutboxWriter` | Sim | — |
 | `OutboxRelay` | Não | Só se houver pelo menos um bean `MessagePublisher` |
 | `MetricsCollector` | Não | Só se houver `OutboxRelay` |
@@ -73,26 +73,24 @@ banco reclamar do auto-commit.
 
 ## Uso com JPA/Hibernate (02 §3.3)
 
-`SpringOutboxWriter` não serve aqui: ele resolve a conexão via `DataSourceUtils`, que
-não é a mesma conexão física que o Hibernate está usando dentro de uma sessão. Injete o
-`JdbcOutboxWriter` (o mesmo bean que a autoconfiguração já expõe) e use `Session.doWork`:
+O `JdbcOutboxWriter` grava via `JdbcClient`, que pega a conexão pelo `DataSourceUtils`. Com
+`JpaTransactionManager` + Hibernate (o padrão do Boot) a transação expõe a conexão JDBC ao
+`DataSource`, então o `enqueue` entra no mesmo commit — não precisa mais de `Session.doWork`:
 
 ```java
-@Autowired JdbcOutboxWriter writer; // bean do core, exposto por esta autoconfiguração
+@Autowired SpringOutboxWriter writer;
 @PersistenceContext EntityManager entityManager;
 
 @Transactional
 public void criarPedido(Pedido pedido) {
     entityManager.persist(pedido);
     entityManager.flush(); // pedido.getId() só existe depois do flush — enfileirar antes grava payload com ID nulo
-    OutboxMessage mensagem = OutboxMessage.of("Pedido", pedido.getId(), pedido.getVersao(),
-            "PedidoCriado", objectMapper.writeValueAsString(pedido), "pedidos.fifo");
-    entityManager.unwrap(Session.class).doWork(connection -> writer.enqueue(connection, mensagem));
+    writer.enqueue("Pedido", pedido.getId(), pedido.getVersao(), "PedidoCriado", pedido, "pedidos.fifo");
 }
 ```
 
-Mesma conexão física, mesmo commit. A linha da outbox é invisível para o `EntityManager`
-— nunca criar chave estrangeira dela para a tabela de negócio (02 §3.3).
+A linha da outbox é invisível para o `EntityManager` — nunca criar chave estrangeira dela
+para a tabela de negócio (02 §3.3).
 
 ## Health indicator
 

@@ -1,8 +1,7 @@
 package com.example.outbox.core;
 
-import java.sql.Connection;
-
+/** Grava a mensagem na outbox dentro da transação ativa do chamador; quem implementa decide como obtê-la. */
 public interface OutboxWriter {
 
-	void enqueue(Connection connection, OutboxMessage message);
+	void enqueue(OutboxMessage message);
 }

@@ -13,22 +13,19 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** T1.10: métricas de escrita, reivindicação e publicação de 02 §8.1. */
+/** T1.10: métricas de reivindicação e publicação de 02 §8.1 (as de escrita ficam no JdbcOutboxWriterIT, no starter). */
 class MetricasIT extends AbstractPostgresIT {
 
 	@Test
-	void enqueueEPublicacaoAlimentamAsMetricasBasicas() throws Exception {
+	void publicacaoAlimentaAsMetricasBasicas() throws Exception {
 		SimpleMeterRegistry registry = new SimpleMeterRegistry();
-		OutboxWriter writer = new JdbcOutboxWriter(OutboxConfig.defaults(), registry);
+		OutboxSeeder writer = new OutboxSeeder();
 		OutboxMessage message = OutboxMessage.of(
 				"Pedido", "pedido-1", null, "PedidoCriado", "{}", "pedidos.fifo");
 		try (Connection connection = newConnection()) {
 			writer.enqueue(connection, message);
 			connection.commit();
 		}
-
-		assertThat(registry.get("outbox_enqueue_total").tag("outcome", "success").counter().count()).isEqualTo(1.0);
-		assertThat(registry.get("outbox_enqueue_duration").timer().count()).isEqualTo(1);
 
 		InMemoryMessagePublisher publisher = new InMemoryMessagePublisher();
 		OutboxConfig config = OutboxConfig.defaults().withPollingInterval(Duration.ofMillis(30));

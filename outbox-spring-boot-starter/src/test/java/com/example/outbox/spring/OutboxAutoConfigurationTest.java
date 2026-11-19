@@ -1,10 +1,10 @@
 package com.example.outbox.spring;
 
-import com.example.outbox.core.JdbcOutboxWriter;
 import com.example.outbox.core.MessagePublisher;
 import com.example.outbox.core.MetricsCollector;
 import com.example.outbox.core.OutboxConfig;
 import com.example.outbox.core.OutboxRelay;
+import com.example.outbox.core.OutboxWriter;
 import com.example.outbox.core.PurgeJob;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -36,6 +36,7 @@ class OutboxAutoConfigurationTest {
 			assertThat(context).hasSingleBean(OutboxConfig.class);
 			assertThat(context).hasSingleBean(JdbcOutboxWriter.class);
 			assertThat(context).hasSingleBean(SpringOutboxWriter.class);
+			assertThat(context.getBean(OutboxWriter.class)).isInstanceOf(SpringOutboxWriter.class); // @Primary
 			assertThat(context).hasSingleBean(PurgeJob.class); // independe de publisher/relay (02 §6)
 			assertThat(context).doesNotHaveBean(OutboxRelay.class);
 			assertThat(context).doesNotHaveBean(MetricsCollector.class);
