@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** T1.6 (retry/backoff) e T1.7 (quarentena, isolamento entre destinos). */
 class RetryQuarentenaIT extends AbstractPostgresIT {
 
-	private final OutboxWriter writer = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry());
+	private final OutboxSeeder writer = new OutboxSeeder();
 
 	@Test
 	void publisherQueFalhaKvezesDepoisSucede() throws Exception {

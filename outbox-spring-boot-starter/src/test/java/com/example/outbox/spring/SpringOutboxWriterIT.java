@@ -1,6 +1,5 @@
 package com.example.outbox.spring;
 
-import com.example.outbox.core.JdbcOutboxWriter;
 import com.example.outbox.core.OutboxConfig;
 import com.example.outbox.core.OutboxMessage;
 import tools.jackson.databind.ObjectMapper;
@@ -10,6 +9,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.SimpleDriverDataSource;
 import org.springframework.transaction.TransactionStatus;
@@ -29,7 +29,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * T3: {@link SpringOutboxWriter} dentro de uma transação Spring real (não a mão, como em
- * outbox-core). Confirma que {@code DataSourceUtils} amarra a mesma conexão física da
+ * outbox-core). Confirma que {@code JdbcClient} amarra a mesma conexão física da
  * transação (02 §3.2) e que o fail-fast usa {@code TransactionSynchronizationManager}.
  */
 @Testcontainers
@@ -55,8 +55,8 @@ class SpringOutboxWriterIT {
 				(java.sql.Driver) Class.forName("org.postgresql.Driver").getDeclaredConstructor().newInstance(),
 				POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
 		transactionTemplate = new TransactionTemplate(new DataSourceTransactionManager(dataSource));
-		JdbcOutboxWriter delegate = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry());
-		writer = new SpringOutboxWriter(delegate, dataSource, new ObjectMapper());
+		JdbcOutboxWriter delegate = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry(), JdbcClient.create(dataSource));
+		writer = new SpringOutboxWriter(delegate, new ObjectMapper());
 	}
 
 	@AfterAll
@@ -74,8 +74,8 @@ class SpringOutboxWriterIT {
 	@Test
 	void avisaORelayUmaVezPorTransacaoDepoisDoCommitENuncaNoRollback() {
 		java.util.concurrent.atomic.AtomicInteger wakes = new java.util.concurrent.atomic.AtomicInteger();
-		JdbcOutboxWriter delegate = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry());
-		SpringOutboxWriter waking = new SpringOutboxWriter(delegate, dataSource, new ObjectMapper(), wakes::incrementAndGet);
+		JdbcOutboxWriter delegate = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry(), JdbcClient.create(dataSource));
+		SpringOutboxWriter waking = new SpringOutboxWriter(delegate, new ObjectMapper(), wakes::incrementAndGet);
 
 		transactionTemplate.executeWithoutResult(status -> {
 			waking.enqueue(OutboxMessage.of("Pedido", "pedido-1", null, "PedidoCriado", "{}", "pedidos.fifo"));

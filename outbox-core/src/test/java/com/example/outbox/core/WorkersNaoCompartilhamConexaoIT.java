@@ -23,7 +23,7 @@ class WorkersNaoCompartilhamConexaoIT extends AbstractPostgresIT {
 
 	@Test
 	void doisWorkersNaMesmaInstanciaPublicamEmOrdem() throws Exception {
-		OutboxWriter writer = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry());
+		OutboxSeeder writer = new OutboxSeeder();
 		int totalMessages = 15;
 		try (Connection connection = newConnection()) {
 			for (int i = 0; i < totalMessages; i++) {

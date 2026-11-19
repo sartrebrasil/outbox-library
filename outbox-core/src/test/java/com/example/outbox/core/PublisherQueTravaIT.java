@@ -23,7 +23,7 @@ class PublisherQueTravaIT extends AbstractPostgresIT {
 
 	@Test
 	void sessaoOciosaEhEncerradaEFluxoVoltaAServirNaRodadaSeguinte() throws Exception {
-		OutboxWriter writer = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry());
+		OutboxSeeder writer = new OutboxSeeder();
 		OutboxMessage message = OutboxMessage.of(
 				"Pedido", "pedido-1", null, "PedidoCriado", "{}", "pedidos.fifo");
 		try (Connection connection = newConnection()) {

@@ -6,50 +6,36 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import javax.sql.DataSource;
-import java.sql.Connection;
-
 /**
- * Sobrecarga conveniente do core para uso em Spring (02 §3.2): resolve a conexão via
- * {@link DataSourceUtils} em vez de exigi-la do chamador. Complementa o fail-fast do core
- * (§3.4) com {@link TransactionSynchronizationManager#isActualTransactionActive()}, que é
- * confiável dentro do Spring — o {@code connection.getAutoCommit()} do core não é.
+ * Fachada conveniente sobre o {@link OutboxWriter} (02 §3.2): serializa o payload com o
+ * {@link ObjectMapper} do contexto e avisa o relay depois do commit. O fail-fast fora de
+ * transação (§3.4) fica no próprio {@link OutboxWriter}.
  */
-public final class SpringOutboxWriter {
+public final class SpringOutboxWriter implements OutboxWriter {
 
 	private static final Logger LOG = LoggerFactory.getLogger(SpringOutboxWriter.class);
 
 	private final OutboxWriter delegate;
-	private final DataSource dataSource;
 	private final ObjectMapper objectMapper;
 	private final Runnable afterCommit;
 
-	public SpringOutboxWriter(OutboxWriter delegate, DataSource dataSource, ObjectMapper objectMapper) {
-		this(delegate, dataSource, objectMapper, () -> { });
+	public SpringOutboxWriter(OutboxWriter delegate, ObjectMapper objectMapper) {
+		this(delegate, objectMapper, () -> { });
 	}
 
 	/** {@code afterCommit} roda uma vez por transação que gravou no outbox, depois do commit: o starter passa o {@code OutboxRelay#wake}. */
-	public SpringOutboxWriter(OutboxWriter delegate, DataSource dataSource, ObjectMapper objectMapper, Runnable afterCommit) {
+	public SpringOutboxWriter(OutboxWriter delegate, ObjectMapper objectMapper, Runnable afterCommit) {
 		this.delegate = delegate;
-		this.dataSource = dataSource;
 		this.objectMapper = objectMapper;
 		this.afterCommit = afterCommit;
 	}
 
+	@Override
 	public void enqueue(OutboxMessage message) {
-		if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-			throw new IllegalStateException("enqueue() chamado fora de uma transação Spring ativa");
-		}
-		Connection connection = DataSourceUtils.getConnection(dataSource);
-		try {
-			delegate.enqueue(connection, message);
-		} finally {
-			DataSourceUtils.releaseConnection(connection, dataSource);
-		}
+		delegate.enqueue(message);
 		afterCommitOnce();
 	}
 

@@ -24,7 +24,7 @@ class VazamentoDePayloadIT extends AbstractPostgresIT {
 
 	@Test
 	void payloadComMarcadorNuncaApareceNoLog() throws Exception {
-		OutboxWriter writer = new JdbcOutboxWriter(OutboxConfig.defaults(), new SimpleMeterRegistry());
+		OutboxSeeder writer = new OutboxSeeder();
 		OutboxMessage message = OutboxMessage.of(
 				"Pedido", "pedido-1", null, "PedidoCriado", "{\"cpf\":\"" + MARCADOR + "\"}", "pedidos.fifo");
 		try (Connection connection = newConnection()) {

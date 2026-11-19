@@ -78,15 +78,9 @@ propriedades e integração com JPA: [`outbox-spring-boot-starter/README.md`](ou
 ```java
 OutboxConfig config = OutboxConfig.defaults();
 MeterRegistry registry = new SimpleMeterRegistry();
-JdbcOutboxWriter writer = new JdbcOutboxWriter(config, registry);
 
-try (Connection connection = dataSource.getConnection()) {
-    connection.setAutoCommit(false);
-    // ... resto da transação de negócio na mesma connection ...
-    writer.enqueue(connection, OutboxMessage.of("Pedido", pedido.getId(), pedido.getVersao(),
-            "PedidoCriado", objectMapper.writeValueAsString(pedido), "pedidos.fifo"));
-    connection.commit();
-}
+// O escritor (JdbcOutboxWriter, via JdbcClient) mora no outbox-spring-boot-starter. Sem Spring, faça o
+// INSERT em outbox_message (schema no outbox-core) na própria transação de negócio.
 
 OutboxRelay relay = new OutboxRelay(dataSource, config, registry,
         Map.of("pedidos.fifo", new MessageSenderPublisher(new SnsMessageSender(snsClient, topicArn))));
