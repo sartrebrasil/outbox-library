@@ -1,4 +1,4 @@
-package com.example.outbox.spring;
+package com.example.outbox.core;
 
 /** Payload que não serializa (02 §3.5): aborta o commit, igual a payload acima do limite. */
 public class OutboxSerializationException extends RuntimeException {

@@ -4,8 +4,10 @@ import com.example.outbox.core.EnvelopeJsonWriter;
 import com.example.outbox.core.OutboxConfig;
 import com.example.outbox.core.OutboxMessage;
 import com.example.outbox.core.OutboxMetrics;
+import com.example.outbox.core.OutboxSerializationException;
 import com.example.outbox.core.OutboxWriteException;
 import com.example.outbox.core.OutboxWriter;
+import com.example.outbox.core.PayloadSerializer;
 import com.example.outbox.core.PayloadTooLargeException;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.opentelemetry.api.GlobalOpenTelemetry;
@@ -47,11 +49,13 @@ public final class JdbcOutboxWriter implements OutboxWriter {
 	private final OutboxConfig.PayloadLimits payloadLimits;
 	private final OutboxMetrics metrics;
 	private final JdbcClient jdbcClient;
+	private final PayloadSerializer serializer;
 
-	public JdbcOutboxWriter(OutboxConfig config, MeterRegistry registry, JdbcClient jdbcClient) {
+	public JdbcOutboxWriter(OutboxConfig config, MeterRegistry registry, JdbcClient jdbcClient, PayloadSerializer serializer) {
 		this.payloadLimits = config.payloadLimits();
 		this.metrics = new OutboxMetrics(registry);
 		this.jdbcClient = jdbcClient;
+		this.serializer = serializer;
 	}
 
 	@Override
@@ -64,9 +68,7 @@ public final class JdbcOutboxWriter implements OutboxWriter {
 				.setAttribute("outbox.aggregate_type", message.aggregateType())
 				.startSpan();
 		try (Scope scope = span.makeCurrent()) {
-			if (!TransactionSynchronizationManager.isActualTransactionActive()) {
-				throw new IllegalStateException("enqueue() chamado fora de uma transação Spring ativa");
-			}
+			requireTransaction();
 			validateSize(message);
 			insert(message, span);
 			metrics.enqueue(message.aggregateType(), message.destination(), "success", Duration.between(start, Instant.now()));
@@ -87,6 +89,35 @@ public final class JdbcOutboxWriter implements OutboxWriter {
 			throw e;
 		} finally {
 			span.end();
+		}
+	}
+
+	/** Serializa antes de abrir o span do INSERT; a falha (ou a ausência de transação) também conta como {@code error}. */
+	@Override
+	public void enqueue(String aggregateType, String aggregateId, Long aggregateVersion,
+			String eventType, Object payload, String destination) {
+		Instant start = Instant.now();
+		String json;
+		try {
+			requireTransaction();
+			json = serializer.serialize(payload);
+		} catch (RuntimeException e) {
+			metrics.enqueue(aggregateType, destination, "error", Duration.between(start, Instant.now()));
+			if (e instanceof OutboxSerializationException) {
+				// só o tipo, nunca o valor (02 §8.3)
+				LOG.atError().setMessage("payload não serializou")
+						.addKeyValue("aggregateType", aggregateType)
+						.addKeyValue("payloadType", payload == null ? "null" : payload.getClass().getName())
+						.log();
+			}
+			throw e;
+		}
+		enqueue(OutboxMessage.of(aggregateType, aggregateId, aggregateVersion, eventType, json, destination));
+	}
+
+	private static void requireTransaction() {
+		if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+			throw new IllegalStateException("enqueue() chamado fora de uma transação Spring ativa");
 		}
 	}
 

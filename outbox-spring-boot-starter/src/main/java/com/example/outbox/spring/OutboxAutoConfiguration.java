@@ -4,6 +4,7 @@ import com.example.outbox.core.MessagePublisher;
 import com.example.outbox.core.MetricsCollector;
 import com.example.outbox.core.OutboxConfig;
 import com.example.outbox.core.OutboxRelay;
+import com.example.outbox.core.PayloadSerializer;
 import com.example.outbox.core.PurgeJob;
 import tools.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -49,19 +50,25 @@ public class OutboxAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
+	public PayloadSerializer payloadSerializer(ObjectMapper objectMapper) {
+		return new JacksonPayloadSerializer(objectMapper);
+	}
+
+	@Bean
+	@ConditionalOnMissingBean
 	public JdbcOutboxWriter jdbcOutboxWriter(OutboxConfig config, MeterRegistry registry, DataSource dataSource,
-			ObjectProvider<JdbcClient> jdbcClient) {
-		return new JdbcOutboxWriter(config, registry, jdbcClient.getIfAvailable(() -> JdbcClient.create(dataSource)));
+			ObjectProvider<JdbcClient> jdbcClient, PayloadSerializer serializer) {
+		return new JdbcOutboxWriter(config, registry, jdbcClient.getIfAvailable(() -> JdbcClient.create(dataSource)), serializer);
 	}
 
 	/** {@code @Primary}: quem injeta {@code OutboxWriter} recebe este (com aviso ao relay), não o {@link JdbcOutboxWriter} cru. */
 	@Bean
 	@Primary
 	@ConditionalOnMissingBean
-	public SpringOutboxWriter springOutboxWriter(JdbcOutboxWriter delegate, ObjectMapper objectMapper,
+	public SpringOutboxWriter springOutboxWriter(JdbcOutboxWriter delegate,
 			ObjectProvider<OutboxRelay> relay) {
 		// sem relay neste contexto (sem MessagePublisher) o aviso não faz nada; o provider evita a dependência circular
-		return new SpringOutboxWriter(delegate, objectMapper, () -> relay.ifAvailable(OutboxRelay::wake));
+		return new SpringOutboxWriter(delegate, () -> relay.ifAvailable(OutboxRelay::wake));
 	}
 
 	/** Só existe se a aplicação registrou pelo menos um {@link MessagePublisher} (02 §4.2.3). */
