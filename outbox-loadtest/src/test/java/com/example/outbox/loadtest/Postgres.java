@@ -1,15 +1,14 @@
 package com.example.outbox.loadtest;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
 import org.testcontainers.containers.PostgreSQLContainer;
 
 import javax.sql.DataSource;
-import java.io.PrintWriter;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.logging.Logger;
 
 /** Postgres único por execução; o schema vem da migração do core. */
 final class Postgres implements AutoCloseable {
@@ -19,20 +18,32 @@ final class Postgres implements AutoCloseable {
 
 	Postgres() {
 		container.start();
+		pool = newPool();
 		Flyway.configure().dataSource(container.getJdbcUrl(), container.getUsername(), container.getPassword())
 				.locations("classpath:db/outbox/postgresql").load().migrate();
 	}
 
+	/** Pool único: sem ele cada transação abre um socket novo e a faixa de portas efêmeras esgota (TIME_WAIT). */
+	private final HikariDataSource pool;
+
+	private HikariDataSource newPool() {
+		HikariConfig cfg = new HikariConfig();
+		cfg.setJdbcUrl(container.getJdbcUrl());
+		cfg.setUsername(container.getUsername());
+		cfg.setPassword(container.getPassword());
+		cfg.setMaximumPoolSize(32);
+		return new HikariDataSource(cfg);
+	}
+
 	Connection connection() throws SQLException {
-		Connection c = DriverManager.getConnection(container.getJdbcUrl(), container.getUsername(), container.getPassword());
+		Connection c = pool.getConnection();
 		c.setAutoCommit(false);
 		return c;
 	}
 
-	/** DataSource do Spring (nova conexão por transação), para o writer real participar de transações. */
-	javax.sql.DataSource springDataSource() {
-		return new org.springframework.jdbc.datasource.SimpleDriverDataSource(new org.postgresql.Driver(),
-				container.getJdbcUrl(), container.getUsername(), container.getPassword());
+	/** DataSource do Spring, para o writer real participar de transações. */
+	DataSource springDataSource() {
+		return pool;
 	}
 
 	void truncate() throws SQLException {
@@ -42,25 +53,14 @@ final class Postgres implements AutoCloseable {
 		}
 	}
 
-	/** DataSource mínimo (uma conexão nova por chamada), como nos ITs do core: o relay abre as dele. */
+	/** DataSource do relay (abre as conexões dele). */
 	DataSource dataSource() {
-		return new DataSource() {
-			@Override public Connection getConnection() throws SQLException {
-				return DriverManager.getConnection(container.getJdbcUrl(), container.getUsername(), container.getPassword());
-			}
-			@Override public Connection getConnection(String u, String p) throws SQLException { return getConnection(); }
-			@Override public PrintWriter getLogWriter() { return null; }
-			@Override public void setLogWriter(PrintWriter out) { }
-			@Override public void setLoginTimeout(int seconds) { }
-			@Override public int getLoginTimeout() { return 0; }
-			@Override public Logger getParentLogger() { return Logger.getGlobal(); }
-			@Override public <T> T unwrap(Class<T> iface) throws SQLException { throw new SQLException(); }
-			@Override public boolean isWrapperFor(Class<?> iface) { return false; }
-		};
+		return pool;
 	}
 
 	@Override
 	public void close() {
+		pool.close();
 		container.stop();
 	}
 }

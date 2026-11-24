@@ -8,8 +8,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Reivindicação em dois passos (02 §4.2.2): candidatos sem lock nenhum, depois advisory
@@ -24,20 +28,25 @@ final class FluxoClaimer {
 
 	private static final int CLASS_ID = 1329748044;
 
+	// Spike (docs/plan/07): caminha por seq no índice parcial e deduplica em Java; a ordem da
+	// primeira aparição por fluxo equivale a ORDER BY min(seq). Sem segunda página para fluxo quente.
 	private static final String CANDIDATES_SQL = """
 			SELECT o.aggregate_id, o.destination
 			FROM outbox_message o
 			WHERE o.status = 'PENDING'
+			  AND o.available_at < 'infinity'
 			  AND o.available_at <= now()
 			  AND NOT EXISTS (
 			        SELECT 1 FROM outbox_message d
 			        WHERE d.aggregate_id = o.aggregate_id
 			          AND d.destination = o.destination
 			          AND d.status = 'DEAD_LETTER')
-			GROUP BY o.aggregate_id, o.destination
-			ORDER BY min(o.seq)
+			ORDER BY o.seq
 			LIMIT ?
 			""";
+
+	/** shortcut: janela fixa de linhas por candidato desejado, vira função do backlog por fluxo no passo 2 do plano. */
+	private static final int ROWS_PER_CANDIDATE = 20;
 
 	private static final String TRY_LOCK_SQL = "SELECT pg_try_advisory_xact_lock(?, hashtext(? || '|' || ?))";
 
@@ -59,16 +68,20 @@ final class FluxoClaimer {
 	}
 
 	private static List<Fluxo> candidates(Connection connection, int candidateLimit) throws SQLException {
-		List<Fluxo> candidates = new ArrayList<>();
+		Set<Fluxo> candidates = new LinkedHashSet<>();
 		try (PreparedStatement statement = connection.prepareStatement(CANDIDATES_SQL)) {
-			statement.setInt(1, candidateLimit);
+			statement.setInt(1, candidateLimit * ROWS_PER_CANDIDATE);
 			try (ResultSet resultSet = statement.executeQuery()) {
-				while (resultSet.next()) {
+				while (resultSet.next() && candidates.size() < candidateLimit) {
 					candidates.add(new Fluxo(resultSet.getString("aggregate_id"), resultSet.getString("destination")));
 				}
 			}
 		}
-		return candidates;
+		// Embaralha para workers concorrentes não disputarem todos o mesmo fluxo mais antigo (cada tryLock
+		// perdido é um round trip). A ordem dentro do fluxo vem do lock + ORDER BY seq, não desta lista.
+		List<Fluxo> shuffled = new ArrayList<>(candidates);
+		Collections.shuffle(shuffled, ThreadLocalRandom.current());
+		return shuffled;
 	}
 
 	private static boolean tryLock(Connection connection, Fluxo fluxo) throws SQLException {

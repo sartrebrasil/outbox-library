@@ -9,6 +9,8 @@
     <file url="file://$PROJECT_DIR$/outbox-broker-sns/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/outbox-core/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/outbox-core/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/outbox-loadtest/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/outbox-loadtest/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/outbox-spring-boot-starter/src/main/java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/outbox-spring-boot-starter/src/main/resources" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
