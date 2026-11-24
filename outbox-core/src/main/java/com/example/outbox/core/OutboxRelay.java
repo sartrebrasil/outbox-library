@@ -173,12 +173,16 @@ public final class OutboxRelay implements AutoCloseable {
 	 */
 	private void publishFluxo(Connection connection, Fluxo fluxo) throws SQLException {
 		int published = 0;
+		// As marcações PUBLISHED vão num único UPDATE por fluxo (um round trip em vez de N). Elas só valem
+		// no commit do ciclo, como antes, então o at-least-once não muda. Precisam ser gravadas ANTES do
+		// backoff/quarentena, que atualizam tudo que ainda está PENDING no fluxo.
+		List<UUID> publishedIds = new ArrayList<>();
 		for (PendingMessage message : pendingMessagesOf(connection, fluxo)) {
 			Instant start = Instant.now();
 			Span span = startPublishSpan(fluxo, message);
 			try {
 				resolvePublisher(fluxo.destination()).publish(toEnvelope(message), config.publishTimeout());
-				markPublished(connection, message.id());
+				publishedIds.add(message.id());
 				published++;
 				span.setAttribute("outbox.outcome", "success");
 				metrics.published(fluxo.destination());
@@ -191,6 +195,7 @@ public final class OutboxRelay implements AutoCloseable {
 				span.recordException(e);
 				metrics.publishFailure(fluxo.destination(), "permanent");
 				metrics.publishDuration(fluxo.destination(), "permanent_failure", Duration.between(start, Instant.now()));
+				markPublished(connection, publishedIds);
 				quarantine(connection, fluxo, message, e.getMessage());
 				return;
 			} catch (Exception e) {
@@ -199,12 +204,14 @@ public final class OutboxRelay implements AutoCloseable {
 				metrics.publishFailure(fluxo.destination(), "transient");
 				metrics.publishDuration(fluxo.destination(), "transient_failure", Duration.between(start, Instant.now()));
 				metrics.retryScheduled(fluxo.destination());
+				markPublished(connection, publishedIds);
 				backoff(connection, fluxo, message, e);
 				return;
 			} finally {
 				span.end();
 			}
 		}
+		markPublished(connection, publishedIds);
 		if (published > 0) {
 			metrics.relayBatchSize(published);
 		}
@@ -370,11 +377,15 @@ public final class OutboxRelay implements AutoCloseable {
 		return messages;
 	}
 
-	private void markPublished(Connection connection, UUID id) throws SQLException {
+	private void markPublished(Connection connection, List<UUID> ids) throws SQLException {
+		if (ids.isEmpty()) {
+			return;
+		}
 		try (PreparedStatement update = connection.prepareStatement(
-				"UPDATE outbox_message SET status = 'PUBLISHED', processed_at = now() WHERE id = ?")) {
-			update.setObject(1, id);
+				"UPDATE outbox_message SET status = 'PUBLISHED', processed_at = now() WHERE id = ANY (?)")) {
+			update.setArray(1, connection.createArrayOf("uuid", ids.toArray()));
 			update.executeUpdate();
 		}
+		ids.clear();
 	}
 }
