@@ -8,10 +8,12 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Reivindicação em dois passos (02 §4.2.2): candidatos sem lock nenhum, depois advisory
@@ -75,7 +77,11 @@ final class FluxoClaimer {
 				}
 			}
 		}
-		return new ArrayList<>(candidates);
+		// Embaralha para workers concorrentes não disputarem todos o mesmo fluxo mais antigo (cada tryLock
+		// perdido é um round trip). A ordem dentro do fluxo vem do lock + ORDER BY seq, não desta lista.
+		List<Fluxo> shuffled = new ArrayList<>(candidates);
+		Collections.shuffle(shuffled, ThreadLocalRandom.current());
+		return shuffled;
 	}
 
 	private static boolean tryLock(Connection connection, Fluxo fluxo) throws SQLException {

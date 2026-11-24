@@ -125,3 +125,18 @@ A/B com o spike da query já aplicado nos dois lados, 3 rodadas, média em msg/s
 | rabbit-w8-cl200 | 5.445 | 6.108 | +12% (faixa depois: 5.481–6.628) |
 
 Critério de ≥ 15% atendido em `rabbit-w4` e `rabbit-w4-big`; `rabbit-w8-cl200` ficou abaixo, com variação alta. `sqs-w4` não foi medido (o ciclo é ~96% publish, não deve mudar). O nível absoluto da máquina variou entre as sessões (o `inmemory-w4` "antes" desta rodada é maior que o de rodadas anteriores), então só vale comparar antes/depois da mesma rodada.
+
+## Resultado: embaralhar candidatos por worker (2026-11-24)
+
+`Collections.shuffle(candidatos, ThreadLocalRandom)` em `FluxoClaimer.candidates`; teste `FluxoClaimerEmbaralhaIT`. A/B de 3 rodadas, médias em msg/s, mesma sessão.
+
+| profile | antes | depois | variação | `contended` por rodada (antes → depois) |
+|---|---|---|---|---|
+| inmemory-w4 | 7.700 | 7.912 | +3% | ~830 → ~75 |
+| rabbit-w4 | 5.816 | 5.359 | −8% | ~540 → 29 |
+| rabbit-w8-cl200 | 6.316 | 6.260 | −1% | ~1.300 → ~110 |
+| rabbit-w4-big | 5.218 | 5.156 | −1% | ~4.760 → 133 |
+
+**A contenção caiu ~95%, mas o throughput não mudou** (dentro do ruído de ~5%; o −8% do `rabbit-w4` tem sobreposição de faixas com o "antes"). A estimativa de ~7% por locks perdidos não se confirmou: ou o custo do lock perdido é menor que o estimado, ou o limite do ciclo está em outro ponto (platô ~5,5–6,3k msg/s também no `w8`, que sugere teto no broker/consumo/CPU da máquina; não verificado).
+
+**Decisão:** mantido, por escolha do responsável, pela redução de contenção (`contended` −95%) e porque o throughput ficou neutro dentro do ruído.
